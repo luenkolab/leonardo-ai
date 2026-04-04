@@ -1,4 +1,3 @@
-import random
 import streamlit as st
 from project import validate_category, generate_invention
 
@@ -99,9 +98,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ----------------------------
-# Top bar
-# ----------------------------
 top1, top2, top3 = st.columns([2, 1, 1])
 
 with top1:
@@ -131,15 +127,9 @@ with top3:
         index=1
     )
 
-# ----------------------------
-# Session state for history
-# ----------------------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# ----------------------------
-# Expanded categories
-# ----------------------------
 display_categories = [
     "flight",
     "water",
@@ -153,9 +143,7 @@ display_categories = [
     "space"
 ]
 
-# ----------------------------
-# Helpers
-# ----------------------------
+
 def build_fallback_concept(category, prompt_text):
     title = f"Leonardo Concept for {category.title()}: {prompt_text[:60]}"
     principle = (
@@ -192,9 +180,25 @@ def generate_difficulty(category, creativity_mode):
         "space": "Extreme"
     }.get(category, "High")
 
-    if creativity_mode == "Experimental" and base != "Extreme":
+    if creativity_mode == "Experimental" and base == "Medium":
         return "High"
     return base
+
+
+def generate_modern_difficulty(category):
+    mapping = {
+        "flight": "High",
+        "water": "High",
+        "war": "Extreme",
+        "transport": "Medium",
+        "energy": "High",
+        "medicine": "Extreme",
+        "architecture": "High",
+        "agriculture": "Medium",
+        "robotics": "High",
+        "space": "Extreme"
+    }
+    return mapping.get(category, "High")
 
 
 def generate_materials(category):
@@ -246,9 +250,6 @@ def generate_investor_summary(title, category, demand, roi):
     )
 
 
-# ----------------------------
-# Layout
-# ----------------------------
 left, right = st.columns([1, 2])
 
 with left:
@@ -304,7 +305,9 @@ with left:
         """
         <div class="feature-box">✅ Leonardo-style invention idea</div>
         <div class="feature-box">✅ Principle of operation</div>
+        <div class="feature-box">✅ Leonardo sketch description</div>
         <div class="feature-box">✅ Modern implementation</div>
+        <div class="feature-box">✅ Modern sketch description</div>
         <div class="feature-box">✅ Market demand estimate</div>
         <div class="feature-box">✅ ROI analysis</div>
         <div class="feature-box">✅ Difficulty level</div>
@@ -312,7 +315,6 @@ with left:
         <div class="feature-box">✅ Materials / technologies</div>
         <div class="feature-box">✅ Use cases</div>
         <div class="feature-box">✅ Investor summary</div>
-        <div class="feature-box">✅ Sketch description for slides/video</div>
         <div class="feature-box">✅ Voice assistant interaction concept</div>
         """,
         unsafe_allow_html=True
@@ -361,19 +363,21 @@ with right:
             title, principle, modern_version, demand, roi = build_fallback_concept(category, prompt_text)
 
         difficulty = generate_difficulty(category, creativity_mode)
+        modern_difficulty = generate_modern_difficulty(category)
         materials = generate_materials(category)
         use_cases = generate_use_cases(category)
-        dev_time = generate_dev_time(difficulty)
+        dev_time = generate_dev_time(modern_difficulty)
         investor_summary = generate_investor_summary(title, category, demand, roi)
 
-        sketch_description = (
+        leonardo_sketch_description = (
             f"A sepia-toned Renaissance sketch of '{title}', drawn with fine ink lines, "
-            f"mechanical annotations, visible gears, cross-sections, and Leonardo-style notes."
+            f"mechanical annotations, visible gears, cross-sections, and Leonardo-style notes "
+            f"around the concept."
         )
 
-        modern_sketch = (
-            f"A modern engineering concept illustration of '{title}', showing labeled components, "
-            f"smart materials, functional modules, and a presentation-ready product design."
+        modern_sketch_description = (
+            f"A modern engineering sketch of '{title}', showing labeled modules, clean industrial lines, "
+            f"smart materials, digital control systems, and a presentation-ready schematic layout."
         )
 
         if voice_module:
@@ -437,7 +441,9 @@ with right:
                 unsafe_allow_html=True
             )
 
-        st.markdown("## 📜 Generated Invention")
+        st.markdown("## 🎨 Leonardo Concept")
+
+        st.markdown("### 📜 Generated Invention")
         st.markdown(
             f"""
             <div class="result-box">
@@ -449,53 +455,44 @@ with right:
             unsafe_allow_html=True
         )
 
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.markdown(f'<div class="mini-card"><b>Difficulty</b><br>{difficulty}</div>', unsafe_allow_html=True)
-        with m2:
-            st.markdown(f'<div class="mini-card"><b>Mode</b><br>{app_mode}</div>', unsafe_allow_html=True)
-        with m3:
-            st.markdown(f'<div class="mini-card"><b>Language</b><br>{selected_language}</div>', unsafe_allow_html=True)
+        st.markdown("### ⚙️ Principle of Operation")
+        st.markdown(
+            f'<div class="result-box">{principle}</div>',
+            unsafe_allow_html=True
+        )
 
-        c1, c2 = st.columns(2)
+        st.markdown("### ✏️ Leonardo Sketch Description")
+        st.markdown(
+            f'<div class="result-box">{leonardo_sketch_description}</div>',
+            unsafe_allow_html=True
+        )
 
-        with c1:
-            st.markdown("### ⚙️ Principle of Operation")
-            st.markdown(f'<div class="result-box">{principle}</div>', unsafe_allow_html=True)
+        st.markdown("### 🎯 Leonardo Concept Difficulty")
+        st.markdown(
+            f'<div class="result-box">{difficulty}</div>',
+            unsafe_allow_html=True
+        )
 
-            st.markdown("### 📈 Market Demand")
-            st.markdown(f'<div class="result-box">{demand}</div>', unsafe_allow_html=True)
+        st.markdown("---")
+        st.markdown("## 🚀 Modern Engineering")
 
-            st.markdown("### ✏️ Leonardo-Style Sketch Description")
-            st.markdown(f'<div class="result-box">{sketch_description}</div>', unsafe_allow_html=True)
+        st.markdown("### 🚀 Modern Implementation")
+        st.markdown(
+            f'<div class="result-box">{modern_version}</div>',
+            unsafe_allow_html=True
+        )
 
-            st.markdown("### 🖼️ Image Generation Concept")
-            st.markdown(f'<div class="result-box">{image_concept}</div>', unsafe_allow_html=True)
+        st.markdown("### 🧩 Modern Sketch Description")
+        st.markdown(
+            f'<div class="result-box">{modern_sketch_description}</div>',
+            unsafe_allow_html=True
+        )
 
-            st.markdown("### 🧱 Materials / Technologies Needed")
-            st.markdown(
-                f'<div class="result-box">• ' + "<br>• ".join(materials) + "</div>",
-                unsafe_allow_html=True
-            )
-
-        with c2:
-            st.markdown("### 🚀 Modern Implementation")
-            st.markdown(f'<div class="result-box">{modern_version}</div>', unsafe_allow_html=True)
-
-            st.markdown("### 💰 ROI Analysis")
-            st.markdown(f'<div class="result-box">{roi}</div>', unsafe_allow_html=True)
-
-            st.markdown("### 🧩 Modern Concept Illustration")
-            st.markdown(f'<div class="result-box">{modern_sketch}</div>', unsafe_allow_html=True)
-
-            st.markdown("### 🎤 Voice Assistant Concept")
-            st.markdown(f'<div class="result-box">{voice_assistant_concept}</div>', unsafe_allow_html=True)
-
-            st.markdown("### ⏱ Estimated Development Time")
-            st.markdown(f'<div class="result-box">{dev_time}</div>', unsafe_allow_html=True)
-
-        st.markdown("### 📐 Blueprint / Technical Concept")
-        st.markdown(f'<div class="result-box">{blueprint_concept}</div>', unsafe_allow_html=True)
+        st.markdown("### 🧱 Materials / Technologies")
+        st.markdown(
+            f'<div class="result-box">• ' + "<br>• ".join(materials) + "</div>",
+            unsafe_allow_html=True
+        )
 
         st.markdown("### 🧭 Use Cases")
         st.markdown(
@@ -503,8 +500,59 @@ with right:
             unsafe_allow_html=True
         )
 
+        st.markdown("### ⏱ Development Timeline")
+        st.markdown(
+            f'<div class="result-box">{dev_time}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### 🏗️ Modern Engineering Difficulty")
+        st.markdown(
+            f'<div class="result-box">{modern_difficulty}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("---")
+        st.markdown("## 📈 Market & Business")
+
+        st.markdown("### 📈 Market Demand")
+        st.markdown(
+            f'<div class="result-box">{demand}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### 💰 ROI Analysis")
+        st.markdown(
+            f'<div class="result-box">{roi}</div>',
+            unsafe_allow_html=True
+        )
+
         st.markdown("### 📊 Investor Summary")
-        st.markdown(f'<div class="result-box">{investor_summary}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="result-box">{investor_summary}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("---")
+        st.markdown("## 🧠 AI System Features")
+
+        st.markdown("### 🖼 Image Generation Concept")
+        st.markdown(
+            f'<div class="result-box">{image_concept}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### 🎤 Voice Assistant Concept")
+        st.markdown(
+            f'<div class="result-box">{voice_assistant_concept}</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("### 📐 Blueprint Concept")
+        st.markdown(
+            f'<div class="result-box">{blueprint_concept}</div>',
+            unsafe_allow_html=True
+        )
 
     else:
         st.markdown("## Demo Preview")
