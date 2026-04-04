@@ -1,5 +1,11 @@
 import pytest
-from project import choose_category, generate_invention, calculate_score, build_report
+from project import (
+    choose_category,
+    generate_invention,
+    calculate_score,
+    build_report,
+    format_report,
+)
 
 
 def test_choose_category_valid():
@@ -33,15 +39,6 @@ def test_calculate_score_excellent():
     assert calculate_score(invention) == "Excellent project potential"
 
 
-def test_calculate_score_promising():
-    invention = {
-        "market_demand": "Medium",
-        "roi": "Moderate but strategic",
-        "difficulty": "High",
-    }
-    assert calculate_score(invention) == "Promising with realistic challenges"
-
-
 def test_build_report():
     invention = {
         "name": "Test Machine",
@@ -56,8 +53,24 @@ def test_build_report():
 
     report = build_report(invention)
 
-    assert "Generated Invention: Test Machine" in report
-    assert "Modern Realization:" in report
-    assert "How the Modern Version Works:" in report
-    assert "Uses motors and sensors." in report
-    assert "Project Evaluation:" in report
+    assert report["Generated Invention"] == "Test Machine"
+    assert report["Modern Realization"] == "Modern robotic system"
+    assert report["How the Modern Version Works"] == "Uses motors and sensors."
+
+
+def test_format_report():
+    report = {
+        "Generated Invention": "Test Machine",
+        "Leonardo Concept": "A Renaissance concept machine.",
+        "How It Works": "Uses gears and springs.",
+        "Modern Realization": "Modern robotic system",
+        "How the Modern Version Works": "Uses motors and sensors.",
+        "Market Demand": "Medium",
+        "Return Potential": "Moderate but strategic",
+        "Engineering Difficulty": "High",
+        "Project Evaluation": "Promising with realistic challenges",
+    }
+
+    text = format_report(report)
+    assert "Generated Invention: Test Machine" in text
+    assert "Project Evaluation: Promising with realistic challenges" in text

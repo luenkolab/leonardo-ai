@@ -197,12 +197,7 @@ def generate_invention(category):
 
 
 def calculate_score(invention):
-    demand_scores = {
-        "Low": 1,
-        "Medium": 2,
-        "High": 3,
-    }
-
+    demand_scores = {"Low": 1, "Medium": 2, "High": 3}
     roi_scores = {
         "Limited": 1,
         "Sector-dependent": 2,
@@ -214,12 +209,7 @@ def calculate_score(invention):
         "High in logistics": 3,
         "Strong in emergency engineering": 3,
     }
-
-    difficulty_scores = {
-        "Medium": 1,
-        "High": 2,
-        "Very High": 3,
-    }
+    difficulty_scores = {"Medium": 1, "High": 2, "Very High": 3}
 
     demand = demand_scores[invention["market_demand"]]
     roi = roi_scores[invention["roi"]]
@@ -237,20 +227,34 @@ def calculate_score(invention):
 def build_report(invention):
     score = calculate_score(invention)
 
+    return {
+        "Generated Invention": invention["name"],
+        "Leonardo Concept": invention["leonardo_description"],
+        "How It Works": invention["mechanism"],
+        "Modern Realization": invention["modern_version"],
+        "How the Modern Version Works": invention["modern_mechanism"],
+        "Market Demand": invention["market_demand"],
+        "Return Potential": invention["roi"],
+        "Engineering Difficulty": invention["difficulty"],
+        "Project Evaluation": score,
+    }
+
+
+def format_report(report):
     return (
-        f"\nGenerated Invention: {invention['name']}\n"
+        f"\nGenerated Invention: {report['Generated Invention']}\n"
         f"\nLeonardo Concept:\n"
-        f"{invention['leonardo_description']}\n"
+        f"{report['Leonardo Concept']}\n"
         f"\nHow It Works:\n"
-        f"{invention['mechanism']}\n"
+        f"{report['How It Works']}\n"
         f"\nModern Realization:\n"
-        f"{invention['modern_version']}\n"
+        f"{report['Modern Realization']}\n"
         f"\nHow the Modern Version Works:\n"
-        f"{invention['modern_mechanism']}\n"
-        f"\nMarket Demand: {invention['market_demand']}\n"
-        f"Return Potential: {invention['roi']}\n"
-        f"Engineering Difficulty: {invention['difficulty']}\n"
-        f"\nProject Evaluation: {score}\n"
+        f"{report['How the Modern Version Works']}\n"
+        f"\nMarket Demand: {report['Market Demand']}\n"
+        f"Return Potential: {report['Return Potential']}\n"
+        f"Engineering Difficulty: {report['Engineering Difficulty']}\n"
+        f"\nProject Evaluation: {report['Project Evaluation']}\n"
     )
 
 
