@@ -366,6 +366,8 @@ with right:
                 user_prompt=prompt_text,
             )
 
+        title = concept_data["title"]
+
         save_concept(
             title=title,
             category=category,
