@@ -1,7 +1,8 @@
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen import canvas
-
+from io import BytesIO
+from reportlab.lib.utils import ImageReader
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 LEFT = 50
@@ -62,7 +63,32 @@ def _draw_list(c, label, items, y, width=500):
     return y - 8
 
 
-def export_project_plan_pdf(concept_data, output_path):
+def _draw_image(c, image_bytes, y, max_width=500, max_height=260):
+    image = ImageReader(BytesIO(image_bytes))
+    img_width, img_height = image.getSize()
+
+    scale = min(max_width / img_width, max_height / img_height)
+    draw_width = img_width * scale
+    draw_height = img_height * scale
+
+    if y - draw_height < BOTTOM:
+        c.showPage()
+        y = PAGE_HEIGHT - TOP
+
+    c.drawImage(
+        image,
+        LEFT,
+        y - draw_height,
+        width=draw_width,
+        height=draw_height,
+        preserveAspectRatio=True,
+        mask="auto"
+    )
+
+    return y - draw_height - 16
+
+
+def export_project_plan_pdf(concept_data, output_path, saved_images=None):
     c = canvas.Canvas(output_path, pagesize=A4)
     y = PAGE_HEIGHT - TOP
 
@@ -90,6 +116,21 @@ def export_project_plan_pdf(concept_data, output_path):
     y = _draw_list(c, "Materials", concept_data.get("materials", []), y)
     y = _draw_list(c, "Technical Requirements", concept_data.get("technical_requirements", []), y)
     y = _draw_label_value(c, "Modern Sketch Description", concept_data.get("modern_sketch_description", ""), y)
+
+    if saved_images:
+        leonardo_images = [img for img in saved_images if img[1] == "leonardo"]
+        blueprint_images = [img for img in saved_images if img[1] == "blueprint"]
+
+        if leonardo_images or blueprint_images:
+            y = _draw_heading(c, "Generated Visual Assets", y)
+
+        if leonardo_images:
+            y = _draw_label_value(c, "Leonardo Sketch", leonardo_images[0][2] or "Generated image", y)
+            y = _draw_image(c, leonardo_images[0][3], y)
+
+        if blueprint_images:
+            y = _draw_label_value(c, "Modern Blueprint", blueprint_images[0][2] or "Generated image", y)
+            y = _draw_image(c, blueprint_images[0][3], y)
 
     y = _draw_heading(c, "Implementation Roadmap", y)
     roadmap = concept_data.get("implementation_roadmap", {})

@@ -1,6 +1,5 @@
 import json
 import os
-import random
 from openai import OpenAI
 
 
@@ -10,34 +9,6 @@ def _get_client() -> OpenAI:
         raise RuntimeError("OPENAI_API_KEY is not set")
     return OpenAI(api_key=api_key)
 
-
-def _modern_difficulty(category: str) -> str:
-    mapping = {
-        "flight": "High",
-        "water": "High",
-        "war": "Extreme",
-        "transport": "Medium",
-        "energy": "High",
-        "medicine": "Extreme",
-        "architecture": "High",
-        "agriculture": "Medium",
-        "robotics": "High",
-        "space": "Extreme",
-    }
-    return mapping.get(category, "High")
-
-
-def _build_modern_sketch(modern_name: str, materials: list[str], use_cases: list[str]) -> str:
-    materials_text = ", ".join(materials[:4]) if materials else "advanced structural materials"
-    use_cases_text = ", ".join(use_cases[:3]) if use_cases else "urban deployment"
-
-    return (
-        f"A clean modern engineering blueprint of '{modern_name}', presented as a realistic "
-        f"industrial product with labeled modules, compact structural framing, integrated safety systems, "
-        f"digital control architecture, and deployment-ready layout. The concept emphasizes present-day "
-        f"engineering clarity, manufacturability, and application in {use_cases_text}. Key materials and "
-        f"technologies include {materials_text}."
-    )
 
 def generate_system_name(category: str) -> str:
     names = {
@@ -62,7 +33,6 @@ def generate_system_name(category: str) -> str:
 
 def generate_leonardo_concept(category: str, user_prompt_text: str, creativity: str, audience: str) -> dict:
     client = _get_client()
-    system_name = generate_system_name(category)
     system_prompt = f"""
     You are a professional engineering innovation consultant.
 
@@ -252,6 +222,10 @@ def generate_leonardo_concept(category: str, user_prompt_text: str, creativity: 
     - each roadmap stage must include execution_plan, technical_architecture, resources_budget, and validation
     - use professional engineering and project planning language
     - avoid generic filler text
+    - modern_sketch_description must describe a clean engineering blueprint, not an artistic sketch
+    - modern_sketch_description must explicitly avoid Renaissance, sepia, hand-drawn, or notebook aesthetics
+    - modern_sketch_description must include orthographic views, labels, dimensions, arrows, and technical annotations
+    - modern_sketch_description must feel like a CAD or product engineering presentation
     """
 
     user_prompt = f"""

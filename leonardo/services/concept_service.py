@@ -22,7 +22,7 @@ def generate_concept(
             user_prompt=user_prompt,
         )
 
-        if concept:
+        if concept and isinstance(concept, dict) and "title" in concept:
             return concept
 
     except Exception as e:
