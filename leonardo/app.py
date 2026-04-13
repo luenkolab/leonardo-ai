@@ -1,3 +1,7 @@
+# ----------------------------
+# Imports
+# ----------------------------
+
 import os
 import streamlit as st
 import streamlit.components.v1 as components
@@ -110,65 +114,140 @@ def render_complete_guide(stage_name, guide):
 
 
 def render_profile_card(selected_language):
+    concepts = get_concepts()
+    total_concepts = len(concepts)
+    favorite_concepts = sum(1 for item in concepts if item[4])
+
+    current_concept_id = st.session_state.get("current_concept_id")
+    saved_images = get_images_for_concept(current_concept_id) if current_concept_id else []
+    total_images = len(saved_images)
+
     st.markdown(
         f"""
         <div class="profile-card">
-            <h3 style="margin-top:0;">👤 User Panel</h3>
-            <p style="margin-bottom:6px;"><b>Name:</b> Aleksei</p>
-            <p style="margin-bottom:6px;"><b>Role:</b> Creator / Student</p>
-            <p style="margin-bottom:0;"><b>Language:</b> {selected_language}</p>
+            <div class="profile-top">
+                <div class="profile-avatar">🧠</div>
+                <div class="profile-role-badge">Creator / Student</div>
+            </div>
+
+            <div class="profile-name">Aleksei</div>
+            <div class="profile-meta">
+                Building Renaissance-inspired invention systems for modern product thinking.
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Language</div>
+                    <div class="stat-value">{selected_language}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Saved Concepts</div>
+                    <div class="stat-value">{total_concepts}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Favorites</div>
+                    <div class="stat-value">{favorite_concepts}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Saved Images</div>
+                    <div class="stat-value">{total_images}</div>
+                </div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
 
+def render_topbar_menu():
+    with st.popover("⋮", use_container_width=True):
+        st.markdown("### Interface")
+        
+        selected_language = st.selectbox(
+            "Language",
+            ["English", "Русский", "Svenska"],
+            index=["English", "Русский", "Svenska"].index(
+                st.session_state.get("selected_language", "English")
+            ),
+            key="selected_language_menu"
+        )
+
+        theme_mode = st.selectbox(
+            "Theme style",
+            ["Leonardo Dark", "Midnight Blue", "Warm Sepia"],
+            index=["Leonardo Dark", "Midnight Blue", "Warm Sepia"].index(
+                st.session_state.get("theme_mode", "Leonardo Dark")
+            ),
+            key="theme_mode_menu"
+        )
+
+        st.session_state["selected_language"] = selected_language
+        st.session_state["theme_mode"] = theme_mode
+
+
 def render_controls():
-    st.markdown("## Concept Settings")
+    with st.sidebar:
+        st.markdown('<div class="sidebar-title">Leonardo Control</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="sidebar-subtitle">Configure invention generation like a Renaissance lab director.</div>',
+            unsafe_allow_html=True
+        )
 
-    category = st.selectbox(
-        "Choose invention category",
-        CATEGORIES
-    )
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-group-title">⚙️ Concept Settings</div>', unsafe_allow_html=True)
 
-    creativity_mode = st.selectbox(
-        "Creativity mode",
-        ["Classic", "Bold", "Experimental"]
-    )
+        category = st.selectbox(
+            "Invention category",
+            CATEGORIES
+        )
 
-    audience = st.selectbox(
-        "Target audience",
-        ["Engineers", "Investors", "Students", "General Public"]
-    )
+        creativity_mode = st.selectbox(
+            "Creativity mode",
+            ["Classic", "Bold", "Experimental"]
+        )
 
-    render_voice_prompt()
+        audience = st.selectbox(
+            "Target audience",
+            ["Engineers", "Investors", "Students", "General Public"]
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    user_prompt = st.text_area(
-        "Prompt / Idea",
-        placeholder="Example: Create a Renaissance-inspired rescue glider for dangerous mountain missions...",
-        height=120
-    )
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-group-title">🎙 Voice Prompt</div>', unsafe_allow_html=True)
 
-    generate = st.button("✨ Generate Concept", use_container_width=True)
-    regenerate = st.button("🔄 Regenerate", use_container_width=True)
+        render_voice_prompt()
 
-    with st.expander("📦 Included in Output", expanded=False):
-        st.markdown("""
-        - ✅ Leonardo-style invention idea
-        - ✅ Principle of operation
-        - ✅ Leonardo sketch description
-        - ✅ Modern implementation
-        - ✅ Modern blueprint prompt
-        - ✅ Market demand estimate
-        - ✅ ROI analysis
-        - ✅ Difficulty level
-        - ✅ Development timeline
-        - ✅ Materials / technologies
-        - ✅ Use cases
-        - ✅ Investor summary
-        """)
+        user_prompt = st.text_area(
+            "Prompt / Idea",
+            placeholder="Create a Renaissance-inspired rescue glider for dangerous mountain missions...",
+            height=140
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    return category, creativity_mode, audience, user_prompt, generate, regenerate    
+        st.markdown('<div class="sidebar-group">', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-group-title">🚀 Actions</div>', unsafe_allow_html=True)
+
+        generate = st.button("✨ Generate Concept", use_container_width=True)
+        regenerate = st.button("🔄 Regenerate", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        with st.expander("📦 Included in Output", expanded=False):
+            st.markdown("""
+            - ✅ Leonardo-style invention idea
+            - ✅ Principle of operation
+            - ✅ Leonardo sketch description
+            - ✅ Modern implementation
+            - ✅ Modern blueprint prompt
+            - ✅ Market demand estimate
+            - ✅ ROI analysis
+            - ✅ Difficulty level
+            - ✅ Development timeline
+            - ✅ Materials / technologies
+            - ✅ Use cases
+            - ✅ Investor summary
+            """)
+
+    return category, creativity_mode, audience, user_prompt, generate, regenerate
 
 
 def render_system_status():
@@ -180,9 +259,44 @@ def render_system_status():
         st.markdown('<div class="status-good">✅ OpenAI Integration: Active</div>', unsafe_allow_html=True)
     else:
         st.markdown(
-            '<div class="status-warn">🟡 OpenAI Integration: Not detected, fallback mode will be used</div>',
+            '<div class="status-warn">🟡 OpenAI Integration: Not detected — fallback mode will be used</div>',
             unsafe_allow_html=True
         )
+
+
+def generate_or_load_concept(category, creativity_mode, audience, user_prompt, generate, regenerate):
+    should_generate = generate or regenerate
+    concept_data = None
+
+    if "loaded_concept" in st.session_state:
+        concept_data = st.session_state["loaded_concept"]
+
+    if should_generate:
+        st.session_state["leonardo_visual_asset"] = None
+        st.session_state["blueprint_visual_asset"] = None
+        
+        prompt_text = user_prompt.strip() if user_prompt.strip() else f"Create an invention in {category}"
+
+        with st.spinner("Generating concept..."):
+            concept_data = generate_concept(
+                category=category,
+                creativity_mode=creativity_mode,
+                audience=audience,
+                user_prompt=prompt_text,
+            )
+
+        title = concept_data["title"]
+
+        concept_id = save_concept(
+            title=title,
+            category=category,
+            prompt=prompt_text,
+            concept_data=concept_data,
+        )
+
+        st.session_state["current_concept_id"] = concept_id
+
+    return concept_data
 
 
 def render_voice_assistant(concept_data):
@@ -356,164 +470,383 @@ st.set_page_config(
 
 init_db()
 
+if "selected_language" not in st.session_state:
+    st.session_state["selected_language"] = "English"
+
+if "theme_mode" not in st.session_state:
+    st.session_state["theme_mode"] = "Leonardo Dark"
+
 if "leonardo_visual_asset" not in st.session_state:
     st.session_state["leonardo_visual_asset"] = None
 
 if "blueprint_visual_asset" not in st.session_state:
     st.session_state["blueprint_visual_asset"] = None
 
+
+# ----------------------------
+# Theme variables
+# ----------------------------
+
+theme_mode = st.session_state.get("theme_mode", "Leonardo Dark")
+
+if theme_mode == "Warm Sepia":
+    bg_main = "#1a120b"
+    bg_grad_1 = "rgba(180, 120, 40, 0.18)"
+    bg_grad_2 = "rgba(120, 80, 30, 0.10)"
+    hero_from = "rgba(88, 49, 20, 0.94)"
+    hero_to = "rgba(30, 22, 16, 0.92)"
+elif theme_mode == "Midnight Blue":
+    bg_main = "#081120"
+    bg_grad_1 = "rgba(59, 130, 246, 0.16)"
+    bg_grad_2 = "rgba(99, 102, 241, 0.10)"
+    hero_from = "rgba(15, 23, 42, 0.95)"
+    hero_to = "rgba(17, 24, 39, 0.95)"
+else:
+    bg_main = "#0b1220"
+    bg_grad_1 = "rgba(180, 120, 40, 0.10)"
+    bg_grad_2 = "rgba(59, 130, 246, 0.10)"
+    hero_from = "rgba(58, 33, 14, 0.90)"
+    hero_to = "rgba(15, 23, 42, 0.92)"
+
+selected_language = st.session_state.get("selected_language", "English")
+
+
+# ----------------------------
+# CSS
+# ----------------------------
+
 st.markdown(
-    """
+    f"""
     <style>
-    .main-title {
-        font-size: 42px;
-        font-weight: 800;
-        margin-bottom: 8px;
-        color: #f9fafb;
-    }
-    .subtitle {
-        font-size: 18px;
-        color: #9ca3af;
-        margin-bottom: 20px;
-    }
-    .topbar {
-        background: linear-gradient(90deg, #111827, #1f2937);
-        border: 1px solid #374151;
-        border-radius: 18px;
-        padding: 18px 22px;
-        margin-bottom: 18px;
-    }
-    .topbar-title {
-        font-size: 26px;
-        font-weight: 700;
-        color: #f9fafb;
-        margin-bottom: 4px;
-    }
-    .topbar-subtitle {
-        font-size: 14px;
-        color: #9ca3af;
-    }
-    .profile-card {
-        background: #111827;
-        border: 1px solid #374151;
-        border-radius: 16px;
-        padding: 18px;
+    /* ---------- App shell ---------- */
+    .stApp {{
+        background:
+            radial-gradient(circle at top left, {bg_grad_1}, transparent 28%),
+            radial-gradient(circle at top right, {bg_grad_2}, transparent 24%),
+            linear-gradient(180deg, {bg_main} 0%, #0f172a 100%);
+    }}
+
+    header[data-testid="stHeader"] {{
+        display: none;
+    }}
+
+    [data-testid="stToolbar"] {{
+        display: none;
+    }}
+
+    #MainMenu {{
+        visibility: hidden;
+    }}
+
+    footer {{
+        visibility: hidden;
+    }}
+
+    [data-testid="stAppViewContainer"] {{
+        max-width: 100%;
+    }}
+
+    .block-container {{
+        padding-top: 1rem;
+        padding-bottom: 2rem;
+        max-width: 100% !important;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }}
+
+    /* ---------- Hero banner ---------- */
+    .hero-banner {{
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(212, 175, 55, 0.28);
+        border-radius: 24px;
+        padding: 34px 36px;
+        margin-bottom: 22px;
+        background:
+            linear-gradient(135deg, {hero_from}, {hero_to}),
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='500' viewBox='0 0 1600 500'%3E%3Cg opacity='0.08' stroke='%23d6b36a' fill='none'%3E%3Cpath d='M0 260 C180 180 320 340 480 260 S800 180 960 250 1280 340 1600 200' stroke-width='2'/%3E%3Cpath d='M90 80 L250 80 L250 180 L90 180 Z'/%3E%3Ccircle cx='1180' cy='120' r='70'/%3E%3Cpath d='M1140 120 L1220 120 M1180 80 L1180 160'/%3E%3Cpath d='M580 120 L760 120 L850 210 L670 210 Z'/%3E%3C/g%3E%3C/svg%3E");
+        background-size: cover;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        width: 100%;
+    }}
+
+    .hero-badge {{
+        display: inline-block;
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #f5deb3;
+        background: rgba(212, 175, 55, 0.12);
+        border: 1px solid rgba(212, 175, 55, 0.22);
         margin-bottom: 14px;
+    }}
+
+    .hero-title {{
+        font-size: 54px;
+        font-weight: 800;
+        line-height: 1.05;
+        margin: 0;
+        color: #f8e7c2;
+        letter-spacing: 0.02em;
+        text-shadow: 0 2px 18px rgba(0,0,0,0.35);
+    }}
+
+    .hero-subtitle {{
+        font-size: 22px;
+        font-style: italic;
+        color: #e8d7b1;
+        margin-top: 10px;
+        margin-bottom: 16px;
+    }}
+
+    .hero-description {{
+        max-width: 860px;
+        font-size: 16px;
+        line-height: 1.65;
+        color: #d1d5db;
+        margin-bottom: 0;
+    }}
+
+    /* ---------- Profile card ---------- */
+    .profile-card {{
+        background: linear-gradient(180deg, rgba(17,24,39,0.95), rgba(15,23,42,0.95));
+        border: 1px solid rgba(212, 175, 55, 0.22);
+        border-radius: 22px;
+        padding: 22px;
+        margin-bottom: 16px;
         color: white;
-    }
-    .result-box {
+        box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+    }}
+
+    .profile-top {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+    }}
+
+    .profile-avatar {{
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+        background: linear-gradient(135deg, rgba(212,175,55,0.22), rgba(59,130,246,0.18));
+        border: 1px solid rgba(212,175,55,0.25);
+    }}
+
+    .profile-role-badge {{
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        color: #f8e7c2;
+        border: 1px solid rgba(212,175,55,0.2);
+        background: rgba(212,175,55,0.08);
+    }}
+
+    .profile-name {{
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 6px 0;
+        color: #f9fafb;
+    }}
+
+    .profile-meta {{
+        color: #cbd5e1;
+        font-size: 14px;
+        margin-bottom: 14px;
+    }}
+
+    .stat-grid {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
+    }}
+
+    .stat-card {{
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(148,163,184,0.18);
+        border-radius: 14px;
+        padding: 12px;
+    }}
+
+    .stat-label {{
+        font-size: 12px;
+        color: #94a3b8;
+        margin-bottom: 4px;
+    }}
+
+    .stat-value {{
+        font-size: 18px;
+        font-weight: 700;
+        color: #f8fafc;
+    }}
+
+    /* ---------- Content cards ---------- */
+    .section-card {{
+        background: linear-gradient(180deg, rgba(15,23,42,0.94), rgba(17,24,39,0.96));
+        border: 1px solid rgba(148,163,184,0.16);
+        border-radius: 20px;
+        padding: 22px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.20);
+    }}
+
+    .section-title {{
+        font-size: 30px;
+        font-weight: 800;
+        color: #f8fafc;
+        margin-bottom: 12px;
+    }}
+
+    .section-text {{
+        font-size: 16px;
+        line-height: 1.7;
+        color: #d1d5db;
+    }}
+
+    .status-good {{
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(22, 101, 52, 0.22);
+        border: 1px solid rgba(34, 197, 94, 0.28);
+        color: #dcfce7;
+        margin-bottom: 10px;
+        font-weight: 500;
+    }}
+
+    .status-warn {{
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: rgba(146, 64, 14, 0.22);
+        border: 1px solid rgba(245, 158, 11, 0.28);
+        color: #fde68a;
+        margin-bottom: 10px;
+        font-weight: 500;
+    }}
+
+    .result-box {{
         padding: 18px;
         border-radius: 16px;
-        background-color: #f8fafc;
-        border: 1px solid #d1d5db;
+        background: rgba(248,250,252,0.96);
+        border: 1px solid #dbe3ec;
         margin-top: 12px;
         margin-bottom: 12px;
         color: #111827;
-    }
-    .status-good {
-        padding: 10px 14px;
-        border-radius: 10px;
-        background: #052e16;
-        border: 1px solid #166534;
-        color: #dcfce7;
-        margin-bottom: 8px;
-    }
-    .status-warn {
-        padding: 10px 14px;
-        border-radius: 10px;
-        background: #3f2a00;
-        border: 1px solid #92400e;
-        color: #fde68a;
-        margin-bottom: 8px;
-    }
-    .mini-card {
-        padding: 14px;
-        border-radius: 14px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }}
+
+    .mini-card {{
+        padding: 16px;
+        border-radius: 16px;
         background: #111827;
         border: 1px solid #374151;
         color: white;
         margin-bottom: 10px;
-    }
-    .small-note {
+        box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    }}
+
+    .small-note {{
         font-size: 13px;
         color: #9ca3af;
         margin-top: 6px;
-    }
+    }}
+
+    /* ---------- Sidebar ---------- */
+    section[data-testid="stSidebar"] {{
+        background: linear-gradient(180deg, rgba(16,24,40,0.98), rgba(10,15,28,0.98));
+        border-right: 1px solid rgba(148,163,184,0.12);
+    }}
+
+    section[data-testid="stSidebar"] .block-container {{
+        padding-top: 1.4rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }}
+
+    .sidebar-title {{
+        font-size: 26px;
+        font-weight: 800;
+        color: #f8e7c2;
+        margin-bottom: 4px;
+    }}
+
+    .sidebar-subtitle {{
+        color: #94a3b8;
+        font-size: 14px;
+        margin-bottom: 18px;
+    }}
+
+    .sidebar-group {{
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(148,163,184,0.14);
+        margin-bottom: 14px;
+    }}
+
+    .sidebar-group-title {{
+        font-size: 15px;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 10px;
+    }}
+
+    /* ---------- Popover / menu ---------- */
+    div[data-testid="stPopover"] button {{
+        border-radius: 14px !important;
+        min-height: 44px !important;
+        font-size: 22px !important;
+    }}
+
+    /* ---------- Micro interactions ---------- */
+    button {{
+        transition: all 0.15s ease;
+    }}
+
+    button:hover {{
+        transform: translateY(-1px);
+    }}
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# ----------------------------
-# Helpers
-# ----------------------------
-
-# ----------------------------
-# Session state
-# ----------------------------
 
 # ----------------------------
 # Top bar
 # ----------------------------
-top1, top2 = st.columns([3, 1])
 
-with top1:
+topbar_left, topbar_right = st.columns([12, 1], vertical_alignment="top")
+
+with topbar_left:
     st.markdown(
         """
-        <div class="topbar">
-            <div class="topbar-title">🎨 Leonardo AI</div>
-            <div class="topbar-subtitle">
-                Renaissance Invention Generator with Modern Engineering Analysis
-            </div>
+        <div class="hero-banner">
+            <div class="hero-badge">Renaissance Concepts • Modern Engineering • Product Strategy</div>
+            <h1 class="hero-title">Leonardo AI</h1>
+            <div class="hero-subtitle">Renaissance Invention Generator with Modern Engineering Analysis</div>
+            <p class="hero-description">
+                Generate invention concepts inspired by Renaissance engineering and transform them
+                into modern product strategies, technical systems, visual blueprints, and commercial opportunities.
+            </p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-with top2:
-    selected_language = st.selectbox(
-        "Language",
-        ["English", "Русский", "Svenska"],
-        index=0
-    )
+with topbar_right:
+    render_topbar_menu()
+
 
 # ----------------------------
 # Layout
 # ----------------------------
-def generate_or_load_concept(category, creativity_mode, audience, user_prompt, generate, regenerate):
-    should_generate = generate or regenerate
-    concept_data = None
-
-    if "loaded_concept" in st.session_state:
-        concept_data = st.session_state["loaded_concept"]
-
-    if should_generate:
-        st.session_state["leonardo_visual_asset"] = None
-        st.session_state["blueprint_visual_asset"] = None
-        
-        prompt_text = user_prompt.strip() if user_prompt.strip() else f"Create an invention in {category}"
-
-        with st.spinner("Generating concept..."):
-            concept_data = generate_concept(
-                category=category,
-                creativity_mode=creativity_mode,
-                audience=audience,
-                user_prompt=prompt_text,
-            )
-
-        title = concept_data["title"]
-
-        concept_id = save_concept(
-            title=title,
-            category=category,
-            prompt=prompt_text,
-            concept_data=concept_data,
-        )
-
-        st.session_state["current_concept_id"] = concept_id
-
-    return concept_data
-
 
 def render_concept_result(concept_data):
         title = concept_data["title"]
@@ -794,15 +1127,35 @@ def render_previous_concepts():
 
     concepts = get_concepts()
 
-    if concepts:
-        for concept_id, saved_title, saved_category, created_at, is_favorite in concepts:
-            col1, col2, col3 = st.columns([5, 1, 1])
+    if not concepts:
+        st.info("No saved concepts yet.")
+        return
+
+    cols = st.columns(2)
+
+    for idx, (concept_id, title, category, created_at, is_favorite) in enumerate(concepts):
+
+        with cols[idx % 2]:
+
+            star = "⭐" if is_favorite else ""
+
+            st.markdown(
+                f"""
+                <div class="mini-card">
+                    <h4 style="margin-top:0;">{star} {title}</h4>
+                    <div class="small-note">
+                        Category: {category}<br>
+                        Created: {created_at}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            col1, col2, col3 = st.columns(3)
 
             with col1:
-                if st.button(
-                    f"Open: {saved_title} ({saved_category}) — {created_at}",
-                    key=f"open_{concept_id}"
-                ):
+                if st.button("Open", key=f"open_{concept_id}", use_container_width=True):
                     selected_concept = get_concept_by_id(concept_id)
 
                     if selected_concept:
@@ -812,42 +1165,43 @@ def render_previous_concepts():
 
             with col2:
                 star_label = "⭐" if is_favorite else "☆"
-                if st.button(star_label, key=f"favorite_{concept_id}"):
+                if st.button(star_label, key=f"favorite_{concept_id}", use_container_width=True):
                     toggle_concept_favorite(concept_id)
                     st.rerun()
 
             with col3:
-                if st.button("🗑", key=f"delete_{concept_id}"):
+                if st.button("Delete", key=f"delete_{concept_id}", use_container_width=True):
                     delete_concept(concept_id)
 
                     if (
                         "loaded_concept" in st.session_state
                         and st.session_state["loaded_concept"]
-                        and st.session_state["loaded_concept"].get("title") == saved_title
+                        and st.session_state["loaded_concept"].get("title") == title
                     ):
                         st.session_state["loaded_concept"] = None
 
                     st.rerun()
-    else:
-        st.info("No saved concepts yet.")
 
 
-left, right = st.columns([1, 2])
+category, creativity_mode, audience, user_prompt, generate, regenerate = render_controls()
+
+left, right = st.columns([1, 2.2], vertical_alignment="top")
 
 with left:
     render_profile_card(selected_language)
-    category, creativity_mode, audience, user_prompt, generate, regenerate = render_controls()
 
 with right:
-    st.markdown("## About the System")
-    st.write(
-        "Leonardo AI generates invention concepts inspired by Renaissance engineering and "
-        "translates them into modern product ideas with practical commercial potential."
-    )
-
-    st.info(
-        "Generate structured invention concepts inspired by Renaissance thinking and adapted "
-        "for modern engineering, product strategy, and commercial evaluation."
+    st.markdown(
+        """
+        <div class="section-card">
+            <div class="section-title">About the System</div>
+            <div class="section-text">
+                Leonardo AI generates invention concepts inspired by Renaissance engineering and
+                translates them into modern product ideas with practical commercial potential.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     render_system_status()
