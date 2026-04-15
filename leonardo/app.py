@@ -565,11 +565,14 @@ st.markdown(
 
     .hero-image-banner {{
         background:
-            linear-gradient(90deg, rgba(8, 12, 24, 0.30), rgba(8, 12, 24, 0.72)),
-            linear-gradient(135deg, {hero_from}, {hero_to}),
-            url("https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1600&q=80");
-        background-size: cover;
+            linear-gradient(90deg, rgba(8, 12, 24, 0.35), rgba(8, 12, 24, 0.75)),
+            url("YOUR_IMAGE_PATH_HERE");
+
+        background-size: contain;
+        background-repeat: no-repeat;
         background-position: center;
+
+        min-height: 420px;
     }}
 
     .hero-overlay {{
@@ -835,22 +838,7 @@ st.markdown(
 topbar_left, topbar_right = st.columns([20, 1], vertical_alignment="top")
 
 with topbar_left:
-    st.markdown(
-        """
-        <div class="hero-banner hero-image-banner">
-            <div class="hero-overlay">
-                <div class="hero-badge">Renaissance Concepts • Modern Engineering • Product Strategy</div>
-                <h1 class="hero-title">Leonardo AI</h1>
-                <div class="hero-subtitle">Renaissance Invention Generator with Modern Engineering Analysis</div>
-                <p class="hero-description">
-                    Where Renaissance imagination meets modern engineering, visual intelligence,
-                    and startup-ready product strategy.
-                </p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.image("banner.png", use_container_width=True)
 
 with topbar_right:
     render_topbar_menu_button()
