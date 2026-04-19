@@ -1,110 +1,60 @@
-# Leonardo AI — CS50 Final Project
+# 🧠 Leonardo AI
 
-## Description
+**Renaissance-inspired AI system for generating inventions and engineering concepts**
 
-Leonardo AI is a Python application inspired by the engineering creativity of Leonardo da Vinci.
-The program generates a Renaissance-style invention and analyzes it using modern engineering thinking.
-
-The application allows users to:
-
-* Choose a category of invention
-* Generate a Leonardo-style concept
-* Explain how the original invention works
-* Propose a modern implementation
-* Explain how the modern version works
-* Evaluate engineering difficulty and market potential
-
-This project demonstrates structured programming, testing, and real-world inspired logic.
+Leonardo AI is a creative engineering platform that combines the imagination of Leonardo da Vinci with modern AI capabilities to generate unique inventions, analyze their feasibility, and visualize their structure.
 
 ---
 
-## Categories
+## 🚀 Demo
 
-Users can choose from the following categories:
-
-* Flight
-* War
-* Water
-* Transport
-
-Each category contains multiple inventions inspired by Leonardo da Vinci concepts.
+> (Coming soon — Streamlit deployment)
 
 ---
 
-## Features
+## ⚙️ Features
 
-* Random invention generator
-* Engineering explanation
-* Modern implementation
-* Market analysis
-* Project evaluation
-* Clean CLI interface
-
----
-
-## Functions
-
-### `choose_category()`
-
-Validates and processes user input.
-
-### `generate_invention()`
-
-Generates a Leonardo-style invention.
-
-### `calculate_score()`
-
-Evaluates project feasibility.
-
-### `build_report()`
-
-Creates a formatted project report.
+- 🎨 Generate original invention concepts in Leonardo-style
+- 🧠 AI-powered descriptions and explanations
+- 🏗 Engineering breakdown of how systems work
+- 📊 Modern implementation analysis (materials, tech stack)
+- 💰 Market demand and ROI estimation
+- 🖼 Concept visualization (sketch + blueprint ideas)
+- 🗣 Voice prompt support (concept-ready)
 
 ---
 
-## Project Structure
+## 🛠 Tech Stack
 
-```
-project.py
-test_project.py
-README.md
-requirements.txt
-```
+- Python  
+- Streamlit  
+- OpenAI API (optional integration)  
+- SQLite (for history & storage)  
 
 ---
 
-## How to Run
+## 🧠 How It Works
 
-```
-python project.py
-```
-
----
-
-## How to Test
-
-```
-pytest test_project.py
-```
+1. Select a category (transport, robotics, energy, etc.)
+2. Enter a custom idea or prompt
+3. Choose creativity level (Classic / Bold / Experimental)
+4. Generate a full invention concept including:
+   - Principle
+   - Engineering design
+   - Modern implementation
+   - Use cases
+   - Market analysis
 
 ---
 
-## Design Decisions
+## 📦 Project Structure
 
-This project was designed to combine creativity and engineering logic.
-Instead of building a simple utility, I chose to build an invention generator inspired by Leonardo da Vinci.
+```bash
+project/
+│
+├── app.py              # Streamlit interface
+├── project.py          # Core logic (CS50 requirement)
+├── ai_generator.py     # AI-based generation (optional)
+├── database.db         # Saved concepts
+└── README.md
 
-A key feature of the project is the explanation of both:
-
-* The original Renaissance invention
-* The modern engineering implementation
-
-This makes the program more educational and technically interesting.
-
----
-
-## Author
-
-Aleksei Luenko
-
-CS50 Python Final Project
