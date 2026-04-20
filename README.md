@@ -63,7 +63,14 @@ The project is designed to move from raw creative inspiration to more structured
 ```text
 leonardo/
 ├── app.py
-├── project.py
 ├── ai_generator.py
-├── database.db
-└── ...
+├── config.py
+├── database.py
+├── pdf_export.py
+├── utils.py
+├── requirements.txt
+├── banner.png
+├── pages/
+├── services/
+└── README.md
+
