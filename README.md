@@ -1,59 +1,69 @@
-# 🧠 Leonardo AI
+# Leonardo AI
 
-**Renaissance-inspired AI system for generating inventions and engineering concepts**
+Leonardo AI is a creative Python project that generates invention concepts inspired by Leonardo da Vinci and translates them into structured modern engineering analysis.
 
-Leonardo AI is a creative engineering platform that combines the imagination of Leonardo da Vinci with modern AI capabilities to generate unique inventions, analyze their feasibility, and visualize their structure.
-
----
-
-## 🚀 Demo
-
-> (Coming soon — Streamlit deployment)
+It combines imagination, engineering logic, and applied AI to turn creative ideas into practical invention concepts with product-oriented thinking.
 
 ---
 
-## ⚙️ Features
+## Project Overview
 
-- 🎨 Generate original invention concepts in Leonardo-style
-- 🧠 AI-powered descriptions and explanations
-- 🏗 Engineering breakdown of how systems work
-- 📊 Modern implementation analysis (materials, tech stack)
-- 💰 Market demand and ROI estimation
-- 🖼 Concept visualization (sketch + blueprint ideas)
-- 🗣 Voice prompt support (concept-ready)
+Leonardo AI explores how generative AI can support invention design, engineering communication, and early-stage product thinking.
 
----
+For each generated concept, the system can produce structured outputs such as:
 
-## 🛠 Tech Stack
-
-- Python  
-- Streamlit  
-- OpenAI API (optional integration)  
-- SQLite (for history & storage)  
+- invention title
+- working principle
+- Renaissance-style sketch description
+- modern blueprint concept
+- materials and components
+- implementation difficulty
+- development timeline
+- practical use cases
+- market demand and ROI perspective
+- investor-oriented summary
 
 ---
 
-## 🧠 How It Works
+## Main Features
 
-1. Select a category (transport, robotics, energy, etc.)
-2. Enter a custom idea or prompt
-3. Choose creativity level (Classic / Bold / Experimental)
-4. Generate a full invention concept including:
-   - Principle
-   - Engineering design
-   - Modern implementation
-   - Use cases
-   - Market analysis
+- Leonardo da Vinci-inspired invention generation
+- Structured engineering concept expansion
+- Modern implementation analysis
+- Materials and component suggestions
+- Difficulty and timeline estimation
+- Use-case and market-oriented thinking
+- Optional AI-powered concept generation
+- Streamlit interface for interactive use
 
 ---
 
-## 📦 Project Structure
+## Tech Stack
 
-```bash
-project/
-│
-├── app.py              # Streamlit interface
-├── project.py          # Core logic (CS50 requirement)
-├── ai_generator.py     # AI-based generation (optional)
-├── database.db         # Saved concepts
-└── README.md
+- Python
+- Streamlit
+- SQLite
+- OpenAI API (optional integration)
+
+---
+
+## How It Works
+
+1. Select a category such as transport, robotics, energy, rescue, or medicine
+2. Enter a prompt or invention idea
+3. Choose a creativity mode
+4. Generate a full concept with technical and product-oriented analysis
+
+The project is designed to move from raw creative inspiration to more structured invention thinking.
+
+---
+
+## Project Structure
+
+```text
+leonardo/
+├── app.py
+├── project.py
+├── ai_generator.py
+├── database.db
+└── ...
