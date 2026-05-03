@@ -254,7 +254,7 @@ main .block-container {
 }
 
 [data-testid="stAppViewContainer"] {
-    overflow-x: hidden !important;
+    overflow-x: auto !important;
 }
 
 [data-testid="stVerticalBlock"] {
@@ -369,28 +369,6 @@ section[data-testid="stSidebar"] .block-container::after {
     word-break: break-word;
 }
 
-.side-nav {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 0.85rem;
-}
-
-.side-nav-item {
-    display: flex;
-    gap: 11px;
-    align-items: center;
-    padding: 12px 13px;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.045);
-    border: 1px solid rgba(217,168,79,0.22);
-    color: #f4d28a;
-    font-family: "Cinzel", Georgia, serif;
-    font-size: 14px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-
 .ornament-line {
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(217,168,79,0.58), transparent);
@@ -472,7 +450,7 @@ div[data-testid="stButton"] > button[kind="primary"] {
 }
 
 main [data-testid="stImage"]:first-of-type {
-    margin: 0 0 2rem 0 !important;
+    margin: 0 0 1.1rem 0 !important;
     border: 1px solid rgba(217,168,79,0.42);
     border-radius: 14px;
     overflow: hidden;
@@ -483,7 +461,7 @@ main [data-testid="stImage"]:first-of-type {
 main [data-testid="stImage"]:first-of-type img {
     display: block;
     width: 100%;
-    height: 215px;
+    height: 150px;
     object-fit: cover;
     object-position: center;
 }
@@ -496,7 +474,7 @@ main [data-testid="stImage"]:first-of-type img {
     line-height: 1.15;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    margin: 0 0 0.7rem 0;
+    margin: 0 0 0.15rem 0;
 }
 
 .heading-rule {
@@ -508,14 +486,14 @@ main [data-testid="stImage"]:first-of-type img {
 
 .status-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
     gap: 18px;
-    margin-bottom: 2.4rem;
+    margin-bottom: 1.25rem;
 }
 
 .status-card {
-    min-height: 112px;
-    padding: 18px 20px;
+    min-height: 76px;
+    padding: 9px 14px;
     border-radius: 13px;
     background: linear-gradient(180deg, rgba(12,32,50,0.88), rgba(8,22,38,0.86));
     border: 1px solid rgba(217,168,79,0.25);
@@ -620,7 +598,7 @@ section[data-testid="stSidebar"] {
     width: 370px !important;
     min-width: 370px !important;
     max-width: 370px !important;
-    overflow: hidden !important;
+    overflow: visible !important;
 }
 
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
@@ -672,7 +650,6 @@ section[data-testid="stSidebar"] label {
 
 section[data-testid="stSidebar"] .profile-row,
 section[data-testid="stSidebar"] .language-row,
-section[data-testid="stSidebar"] .side-nav,
 section[data-testid="stSidebar"] .ornament-line {
     width: 100% !important;
     max-width: 100% !important;
@@ -697,13 +674,13 @@ section[data-testid="stSidebar"] [data-testid="stExpander"] {
 /* ---------- Compact sidebar / remove annoying sidebar scrolling ----------
    This block must stay at the very end of CSS. */
 section[data-testid="stSidebar"] {
-    overflow: hidden !important;
+    overflow: visible !important;
 }
 
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
 section[data-testid="stSidebar"] .block-container {
     overflow-y: hidden !important;
-    padding-top: 6px !important;
+    padding-top: 0px !important;
     padding-bottom: 8px !important;
 }
 
@@ -740,17 +717,6 @@ section[data-testid="stSidebar"] .profile-name {
 section[data-testid="stSidebar"] .profile-email {
     font-size: 11px !important;
     margin-top: 2px !important;
-}
-
-section[data-testid="stSidebar"] .side-nav {
-    gap: 6px !important;
-    margin-bottom: 0.35rem !important;
-}
-
-section[data-testid="stSidebar"] .side-nav-item {
-    padding: 8px 10px !important;
-    min-height: 38px !important;
-    font-size: 13px !important;
 }
 
 section[data-testid="stSidebar"] .ornament-line {
@@ -808,19 +774,9 @@ section[data-testid="stSidebar"] .profile-row {
     padding-bottom: 0.75rem !important;
 }
 
-section[data-testid="stSidebar"] .side-nav {
-    gap: 8px !important;
-    margin-bottom: 0.75rem !important;
-}
-
-section[data-testid="stSidebar"] .side-nav-item {
-    padding-top: 10px !important;
-    padding-bottom: 10px !important;
-}
-
 section[data-testid="stSidebar"] [data-testid="stExpander"] {
     margin-top: 8px !important;
-    margin-bottom: 0.8rem !important;
+    margin-bottom: 8px !important;
 }
 
 section[data-testid="stSidebar"] .ornament-line {
@@ -864,10 +820,22 @@ section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
 }
 
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] > div:first-child {
-    margin-top: -35px !important;
+    margin-top: 0px !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
 }
 
 section[data-testid="stSidebar"] .language-row {
+    position: relative !important;
+    z-index: 9999 !important;
+    padding-top: 6px !important;
     margin-top: 0 !important;
     margin-bottom: 0.55rem !important;
     min-height: 24px !important;
@@ -886,11 +854,11 @@ section[data-testid="stSidebar"] .language-row {
     position: relative !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 220px !important;
-    min-height: 220px !important;
+    height: 125px !important;
+    min-height: 125px !important;
     border: 1px solid rgba(217,168,79,0.42) !important;
     border-radius: 16px !important;
-    margin-bottom: 1.5rem !important;
+    margin-bottom: 1.35rem !important;
     overflow: hidden !important;
     background: #06111f !important;
     box-shadow: inset 0 0 28px rgba(217,168,79,0.08), 0 8px 24px rgba(0,0,0,0.24) !important;
@@ -899,8 +867,10 @@ section[data-testid="stSidebar"] .language-row {
 .concept-empty-image {
     position: absolute !important;
     inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
+    width: 104% !important;
+    height: 104% !important;
+    left: -2% !important;
+    top: -2% !important;
     max-width: none !important;
     object-fit: cover !important;
     object-position: center !important;
@@ -923,29 +893,34 @@ section[data-testid="stSidebar"] .language-row {
 .concept-empty-text {
     position: relative !important;
     z-index: 2 !important;
-    padding: 34px 42px !important;
+    padding: 16px 34px !important;
     max-width: 620px !important;
 }
 
 .concept-empty-text p {
-    color: #d7dce5 !important;
+    max-width: 620px !important;
+    color: #f4d28a !important;
+    font-family: "Cinzel", Georgia, serif !important;
     font-size: 16px !important;
-    line-height: 1.75 !important;
-    margin: 0.2rem 0 0.75rem 0 !important;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.55) !important;
+    font-weight: 600 !important;
+    line-height: 1.65 !important;
+    text-align: left !important;
+    margin: 0.15rem 0 0.65rem 0 !important;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.75) !important;
 }
 
 /* ---------- Feature cards alignment fix ---------- */
 
 .feature-card {
-    min-height: 128px !important;
-    height: 100% !important;
-    padding: 18px 20px !important;
+    min-height: 72px !important;
+    height: auto !important;
+    line-height: 1.3 !important;
+    padding: 8px 14px !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: flex-start !important;
     box-sizing: border-box !important;
-    margin-bottom: 18px !important;
+    margin-bottom: 22px !important;
 
     background: linear-gradient(180deg, rgba(12,32,50,0.86), rgba(8,22,38,0.86)) !important;
     border: 1px solid rgba(217,168,79,0.22) !important;
@@ -954,16 +929,16 @@ section[data-testid="stSidebar"] .language-row {
 }
 
 .feature-title {
-    min-height: 32px !important;
+    min-height: 18px !important;
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 2px !important;
     line-height: 1.25 !important;
 
     font-family: "Cinzel", Georgia, serif !important;
     color: #f8e7c2 !important;
-    font-size: 18px !important;
+    font-size: 14px !important;
     font-weight: 700 !important;
 }
 
@@ -979,9 +954,9 @@ section[data-testid="stSidebar"] .language-row {
 
 .feature-text {
     margin-top: 0 !important;
-    line-height: 1.5 !important;
+    line-height: 1.25 !important;
     color: #a8b3c3 !important;
-    font-size: 14px !important;
+    font-size: 12px !important;
 }
 
 </style>
@@ -1083,6 +1058,7 @@ def render_controls():
             """
 <div class="language-row">
     <span title="English">🇬🇧</span>
+    <span title="Svenska">🇸🇪</span>
     <span title="Русский">🇷🇺</span>
 </div>
 
@@ -1093,14 +1069,20 @@ def render_controls():
         <div class="profile-email">luenko101985@gmail.com</div>
     </div>
 </div>
-
-<div class="side-nav">
-    <div class="side-nav-item">⌂ <span>App</span></div>
-    <div class="side-nav-item">▧ <span>Gallery</span></div>
-</div>
 """,
             unsafe_allow_html=True,
         )
+
+        nav1 = st.button("⌂  APP", key="nav_app", use_container_width=True)
+        nav2 = st.button("▧  GALLERY", key="nav_gallery", use_container_width=True)
+
+        if nav1:
+            st.session_state["page"] = "app"
+            st.rerun()
+
+        if nav2:
+            st.session_state["page"] = "gallery"
+            st.rerun()
 
         render_previous_concepts_sidebar()
 
@@ -1171,7 +1153,7 @@ def render_system_status():
     openai_desc = "Connected to OpenAI services and ready to generate." if openai_active else "API key not detected. Local fallback mode will be used."
 
     render_section_heading("System Status")
-
+    
     st.markdown(
         f"""
 <div class="status-grid">
@@ -1252,7 +1234,7 @@ def render_empty_concept_area():
 
     st.markdown(
         """
-<div class="feature-card" style="margin-top: 18px;">
+<div class="feature-card">
     <div class="feature-title">
         <span class="feature-icon">📊</span>Investor Summary
     </div>
@@ -1261,7 +1243,6 @@ def render_empty_concept_area():
 """,
         unsafe_allow_html=True,
     )
-
 
 def generate_or_load_concept(category, creativity_mode, audience, user_prompt, generate, regenerate):
     concept_data = st.session_state.get("loaded_concept")
@@ -1614,6 +1595,12 @@ def render_concept_result(concept_data):
 category, creativity_mode, audience, user_prompt, generate, regenerate = render_controls()
 
 render_banner()
+
+if st.session_state.get("page", "app") == "gallery":
+    st.markdown("## Gallery")
+    render_saved_images()
+    st.stop()
+
 render_system_status()
 
 concept_data = generate_or_load_concept(
