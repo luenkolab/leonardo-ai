@@ -1,6 +1,7 @@
 import streamlit as st
 
 from application.images import (
+    exclude_automatic_concept_images,
     list_concept_images,
     remove_visual,
     save_visual,
@@ -85,7 +86,9 @@ def render_saved_images():
         st.info("No concept selected.")
         return
 
-    images = list_concept_images(current_concept_id)
+    images = exclude_automatic_concept_images(
+        list_concept_images(current_concept_id)
+    )
 
     if not images:
         st.info("No saved images yet.")

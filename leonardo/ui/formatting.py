@@ -13,5 +13,6 @@ def safe_list(items):
     if not items:
         return ""
     if isinstance(items, list):
-        return "<br>• ".join([""] + [safe_text(item) for item in items])
+        list_items = "".join(f"<li>{safe_text(item)}</li>" for item in items)
+        return f'<ul class="result-list">{list_items}</ul>'
     return safe_text(items)

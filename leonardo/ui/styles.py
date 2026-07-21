@@ -367,6 +367,22 @@ main [data-testid="stImage"]:first-of-type img {
     overflow-wrap: anywhere;
 }
 
+.result-box.result-box--control-gap {
+    margin-bottom: 30px !important;
+}
+
+.st-key-voice_pause,
+.st-key-voice_resume,
+.st-key-voice_stop {
+    margin-top: 14px !important;
+}
+
+.st-key-voice_summary,
+.st-key-voice_investor,
+.st-key-voice_engineering {
+    margin-top: 14px !important;
+}
+
 .result-title {
     font-weight: 800;
     margin-bottom: 0.4rem;
@@ -374,6 +390,21 @@ main [data-testid="stImage"]:first-of-type img {
 
 .result-text {
     line-height: 1.6;
+}
+
+.result-box .result-text > .result-list {
+    margin: 0.2rem 0 0.15rem 0;
+    padding-left: 1.2rem;
+}
+
+.result-box .result-text > .result-list > li {
+    margin: 0.08rem 0;
+    padding: 0;
+    line-height: 1.45;
+}
+
+.result-box .result-text > .result-list > li:last-child {
+    margin-bottom: 0;
 }
 
 .mini-card {
@@ -816,6 +847,250 @@ section[data-testid="stSidebar"] .language-row {
     box-shadow:
         inset 0 0 40px rgba(59,130,246,0.08),
         0 8px 24px rgba(0,0,0,0.25);
+}
+
+/* ---------- Release UI polish: isolated generated-result worlds ---------- */
+
+.st-key-previous_concepts [class*="st-key-open_concept_"] button,
+.st-key-previous_concepts [class*="st-key-favorite_concept_"] button,
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button {
+    width: 74% !important;
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 2px 6px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    font-size: 0.8rem !important;
+    line-height: 1 !important;
+}
+
+.st-key-previous_concepts [class*="st-key-open_concept_"] button p,
+.st-key-previous_concepts [class*="st-key-favorite_concept_"] button p,
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button p {
+    font-size: 0.64rem !important;
+    line-height: 1 !important;
+}
+
+.st-key-leonardo_section,
+.st-key-modern_section {
+    position: relative !important;
+    isolation: isolate !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    border-radius: 20px !important;
+    padding: 26px 28px 28px !important;
+}
+
+.st-key-leonardo_section {
+    margin-top: 26px !important;
+    margin-bottom: 0 !important;
+    color: #F2E4C6 !important;
+    background:
+        radial-gradient(circle at 18% 0%, rgba(200,154,82,0.12), transparent 34%),
+        linear-gradient(145deg, #2A1C12 0%, #20140D 56%, #17100A 100%) !important;
+    border: 1px solid rgba(200,154,82,0.55) !important;
+    box-shadow:
+        inset 0 0 32px rgba(200,154,82,0.045),
+        0 14px 34px rgba(0,0,0,0.24) !important;
+}
+
+.st-key-leonardo_section::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.24;
+    background-image:
+        radial-gradient(rgba(242,228,198,0.09) 0.65px, transparent 0.65px),
+        linear-gradient(110deg, transparent 0%, rgba(200,154,82,0.055) 48%, transparent 74%);
+    background-size: 7px 7px, 100% 100%;
+}
+
+.st-key-leonardo_section > * {
+    position: relative;
+    z-index: 1;
+}
+
+.st-key-leonardo_section h2 {
+    color: #E2B86F !important;
+    font-family: "Cinzel", Georgia, serif !important;
+    letter-spacing: 0.025em !important;
+    margin-top: 0 !important;
+    margin-bottom: 10px !important;
+}
+
+.st-key-leonardo_section [data-testid="stCaptionContainer"],
+.st-key-leonardo_section [data-testid="stCaptionContainer"] p {
+    color: #CDBB98 !important;
+    margin-bottom: 6px !important;
+}
+
+.st-key-leonardo_section [data-testid="stHorizontalBlock"] {
+    gap: 16px !important;
+    margin-top: 18px !important;
+    margin-bottom: 22px !important;
+}
+
+.st-key-leonardo_section [data-testid="stAlert"] {
+    color: #EAD9B7 !important;
+    background: rgba(80,51,29,0.58) !important;
+    border: 1px solid rgba(200,154,82,0.34) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 0 18px rgba(200,154,82,0.035) !important;
+}
+
+.st-key-leonardo_section [data-testid="stAlert"] p {
+    color: #EAD9B7 !important;
+}
+
+.st-key-leonardo_section .result-box {
+    margin: 16px 0 !important;
+    padding: 18px 20px !important;
+    color: #F2E4C6 !important;
+    background: rgba(65,40,23,0.78) !important;
+    border: 1px solid rgba(200,154,82,0.46) !important;
+    border-radius: 14px !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,238,201,0.035),
+        0 8px 20px rgba(0,0,0,0.18) !important;
+}
+
+.st-key-leonardo_section .result-title {
+    color: #DDB36A !important;
+}
+
+.st-key-leonardo_section .result-text,
+.st-key-leonardo_section .result-text p,
+.st-key-leonardo_section .result-text li {
+    color: #F2E4C6 !important;
+}
+
+.st-key-modern_section {
+    margin-top: 28px !important;
+    margin-bottom: 30px !important;
+    color: #EEF6FF !important;
+    background:
+        radial-gradient(circle at 82% 0%, rgba(79,168,255,0.10), transparent 34%),
+        linear-gradient(145deg, #0C1E31 0%, #091726 56%, #06121D 100%) !important;
+    border: 1px solid rgba(79,168,255,0.40) !important;
+    box-shadow:
+        inset 0 0 34px rgba(79,168,255,0.035),
+        0 14px 34px rgba(0,0,0,0.25) !important;
+}
+
+.st-key-modern_section::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.18;
+    background-image:
+        linear-gradient(rgba(79,168,255,0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,168,255,0.12) 1px, transparent 1px);
+    background-size: 36px 36px;
+}
+
+.st-key-modern_section > * {
+    position: relative;
+    z-index: 1;
+}
+
+.st-key-modern_section h2 {
+    color: #82BEF8 !important;
+    letter-spacing: 0.015em !important;
+    margin-top: 12px !important;
+    margin-bottom: 10px !important;
+}
+
+.st-key-modern_section [data-testid="stCaptionContainer"],
+.st-key-modern_section [data-testid="stCaptionContainer"] p {
+    color: #A9BED3 !important;
+    margin-bottom: 6px !important;
+}
+
+.st-key-modern_section [data-testid="stHorizontalBlock"] {
+    gap: 16px !important;
+    margin-top: 18px !important;
+    margin-bottom: 22px !important;
+}
+
+.st-key-leonardo_section [data-testid="stMarkdownContainer"]:has(.concept-image-slot),
+.st-key-modern_section [data-testid="stMarkdownContainer"]:has(.concept-image-slot) {
+    margin-bottom: 0 !important;
+}
+
+.st-key-leonardo_section .concept-image-slot,
+.st-key-modern_section .concept-image-slot {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: hidden;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.st-key-leonardo_section .concept-image-slot > img,
+.st-key-modern_section .concept-image-slot > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.st-key-leonardo_section .concept-image-slot {
+    color: #EAD9B7;
+    background: rgba(80,51,29,0.58);
+    border: 1px solid rgba(200,154,82,0.34);
+    box-shadow: inset 0 0 18px rgba(200,154,82,0.035);
+}
+
+.st-key-modern_section .concept-image-slot {
+    color: #DCEEFF;
+    background: rgba(12,35,56,0.76);
+    border: 1px solid rgba(79,168,255,0.30);
+    box-shadow: inset 0 0 18px rgba(79,168,255,0.035);
+}
+
+.st-key-modern_section [data-testid="stAlert"] {
+    color: #DCEEFF !important;
+    background: rgba(12,35,56,0.76) !important;
+    border: 1px solid rgba(79,168,255,0.30) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 0 18px rgba(79,168,255,0.035) !important;
+}
+
+.st-key-modern_section [data-testid="stAlert"] p {
+    color: #DCEEFF !important;
+}
+
+.st-key-modern_section .result-box {
+    margin: 16px 0 !important;
+    padding: 18px 20px !important;
+    color: #EEF6FF !important;
+    background: rgba(8,26,42,0.84) !important;
+    border: 1px solid rgba(79,168,255,0.36) !important;
+    border-radius: 14px !important;
+    box-shadow:
+        inset 0 1px 0 rgba(207,234,255,0.035),
+        0 8px 20px rgba(0,0,0,0.20),
+        0 0 18px rgba(79,168,255,0.025) !important;
+}
+
+.st-key-modern_section .result-title {
+    color: #75B8F5 !important;
+}
+
+.st-key-modern_section .result-text,
+.st-key-modern_section .result-text p,
+.st-key-modern_section .result-text li {
+    color: #EEF6FF !important;
 }
 
 </style>

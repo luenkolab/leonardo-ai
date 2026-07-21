@@ -3,10 +3,12 @@ import streamlit as st
 from ui.formatting import safe_list, safe_text
 
 
-def render_result_box(title, content):
+def render_result_box(title, content, extra_bottom_spacing=False):
+    spacing_class = " result-box--control-gap" if extra_bottom_spacing else ""
+
     st.markdown(
         f"""
-<div class="result-box">
+<div class="result-box{spacing_class}">
     <div class="result-title">{safe_text(title)}</div>
     <div class="result-text">{safe_list(content)}</div>
 </div>

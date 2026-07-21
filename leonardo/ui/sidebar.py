@@ -10,6 +10,7 @@ from application.concepts import (
 from config import CATEGORIES
 from ui.formatting import pretty_label, safe_text
 from ui.state import (
+    clear_automatic_image_generation_state,
     clear_current_concept,
     clear_transient_visuals,
     get_current_concept_id,
@@ -20,7 +21,7 @@ from ui.voice import render_voice_prompt
 
 
 def render_previous_concepts_sidebar():
-    with st.expander("📦 Previous Concepts", expanded=False):
+    with st.expander("📦 Previous Concepts", expanded=False, key="previous_concepts"):
         concepts = list_recent_concepts()
 
         if not concepts:
@@ -57,6 +58,7 @@ def render_previous_concepts_sidebar():
                         if selected_concept:
                             set_current_concept(selected_concept, concept_id)
                             clear_transient_visuals()
+                            clear_automatic_image_generation_state()
                             st.rerun()
 
             with c2:
@@ -102,8 +104,7 @@ def render_controls():
             st.rerun()
 
         if nav2:
-            set_current_page("gallery")
-            st.rerun()
+            st.switch_page("pages/Gallery.py")
 
         render_previous_concepts_sidebar()
 
