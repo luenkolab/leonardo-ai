@@ -3,7 +3,7 @@ import streamlit as st
 
 GLOBAL_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Noto+Sans:wght@400;500;600;700&display=swap');
 
 :root {
     --gold: #d9a84f;
@@ -18,6 +18,7 @@ GLOBAL_CSS = """
 html, body, .stApp, [data-testid="stAppViewContainer"] {
     margin: 0 !important;
     padding: 0 !important;
+    font-family: "Noto Sans", "Noto Sans CJK SC", "Noto Sans JP", "Noto Sans KR", "Segoe UI", Arial, sans-serif;
 }
 
 .stApp {
@@ -144,44 +145,6 @@ section[data-testid="stSidebar"] .block-container::after {
     gap: 16px;
     margin: 0.35rem 0 0.75rem 0;
     font-size: 21px;
-}
-
-.profile-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 0.35rem 0.25rem 0.9rem 0.25rem;
-    margin-bottom: 0.95rem;
-    border-bottom: 1px solid rgba(217,168,79,0.24);
-}
-
-.profile-avatar {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    background: linear-gradient(135deg, rgba(217,168,79,0.20), rgba(59,130,246,0.12));
-    border: 1px solid rgba(217,168,79,0.55);
-    flex: 0 0 auto;
-}
-
-.profile-name {
-    font-family: "Cinzel", Georgia, serif;
-    color: var(--gold-soft);
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1.1;
-}
-
-.profile-email {
-    color: #8b98aa;
-    font-size: 12px;
-    line-height: 1.35;
-    margin-top: 4px;
-    word-break: break-word;
 }
 
 .ornament-line {
@@ -494,7 +457,6 @@ section[data-testid="stSidebar"] label {
     padding-left: 0 !important;
 }
 
-section[data-testid="stSidebar"] .profile-row,
 section[data-testid="stSidebar"] .language-row,
 section[data-testid="stSidebar"] .ornament-line {
     width: 100% !important;
@@ -542,27 +504,6 @@ section[data-testid="stSidebar"] [data-testid="stElementContainer"] {
 section[data-testid="stSidebar"] .language-row {
     margin: 0.1rem 0 0.35rem 0 !important;
     font-size: 18px !important;
-}
-
-section[data-testid="stSidebar"] .profile-row {
-    gap: 9px !important;
-    padding: 0.2rem 0 0.45rem 0 !important;
-    margin-bottom: 0.45rem !important;
-}
-
-section[data-testid="stSidebar"] .profile-avatar {
-    width: 42px !important;
-    height: 42px !important;
-    font-size: 20px !important;
-}
-
-section[data-testid="stSidebar"] .profile-name {
-    font-size: 18px !important;
-}
-
-section[data-testid="stSidebar"] .profile-email {
-    font-size: 11px !important;
-    margin-top: 2px !important;
 }
 
 section[data-testid="stSidebar"] .ornament-line {
@@ -613,11 +554,6 @@ section[data-testid="stSidebar"] [data-testid="stExpander"] {
    Slightly separates sections after compact mode. Keep at very end. */
 section[data-testid="stSidebar"] .language-row {
     margin: 0.25rem 0 0.7rem 0 !important;
-}
-
-section[data-testid="stSidebar"] .profile-row {
-    margin-bottom: 0.9rem !important;
-    padding-bottom: 0.75rem !important;
 }
 
 section[data-testid="stSidebar"] [data-testid="stExpander"] {

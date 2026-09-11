@@ -2,6 +2,8 @@ import json
 import os
 from openai import OpenAI
 
+from i18n import ai_language_name
+
 
 def _get_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
@@ -31,8 +33,15 @@ def generate_system_name(category: str) -> str:
     return names.get(category, "Leonardo System")
 
 
-def generate_leonardo_concept(category: str, user_prompt_text: str, creativity: str, audience: str) -> dict:
+def generate_leonardo_concept(
+    category: str,
+    user_prompt_text: str,
+    creativity: str,
+    audience: str,
+    language: str = "en",
+) -> dict:
     client = _get_client()
+    response_language = ai_language_name(language)
     system_prompt = f"""
     You are a professional engineering innovation consultant.
 
@@ -214,6 +223,8 @@ def generate_leonardo_concept(category: str, user_prompt_text: str, creativity: 
     Audience: {audience}
 
     Important:
+    - Write every user-facing JSON value in {response_language}
+    - Keep all JSON property names exactly as specified in English
     - Leonardo section must be short
     - Modern section must be detailed and professional
     - Avoid fantasy concepts
@@ -233,6 +244,7 @@ def generate_leonardo_concept(category: str, user_prompt_text: str, creativity: 
     Creativity mode: {creativity}
     Target audience: {audience}
     User prompt: {user_prompt_text}
+    Response language: {response_language}
 
     Rules:
     - The Leonardo concept must sound like a Renaissance notebook concept.

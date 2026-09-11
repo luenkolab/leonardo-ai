@@ -1,5 +1,6 @@
 import streamlit as st
 
+from i18n import DEFAULT_LANGUAGE, LANGUAGE_SESSION_KEY, translate
 from application.concepts import list_recent_concepts
 from application.images import (
     build_concept_gallery_items,
@@ -13,6 +14,8 @@ from database import (
     delete_image_asset,
     toggle_image_favorite,
 )
+from ui.sidebar import render_language_selector
+from ui.state import get_current_language, initialize_session_state
 
 
 def _render_automatic_image_row(heading, images):
@@ -22,11 +25,11 @@ def _render_automatic_image_row(heading, images):
     for index, (column, image) in enumerate(zip(columns, images), start=1):
         with column:
             if image is None:
-                st.info(f"Image {index} is not available.")
+                st.info(translate("gallery.image_unavailable", get_current_language(), index=index))
             else:
                 st.image(
                     image[4],
-                    caption=f"Image {index}",
+                    caption=translate("common.image", get_current_language(), index=index),
                     use_container_width=True,
                 )
 
@@ -41,48 +44,58 @@ def _render_concept_gallery_item(gallery_item):
         key=f"gallery_concept_{concept_id}",
     ):
         st.caption(
-            f'{gallery_item["category"]} • Created: {gallery_item["created_at"]}'
+            f'{translate(f"option.category.{gallery_item["category"]}", get_current_language())} • '
+            f'{translate("common.created", get_current_language())}: {gallery_item["created_at"]}'
         )
         _render_automatic_image_row(
-            "Leonardo Vision",
+            translate("concept.leonardo_vision", get_current_language()),
             gallery_item["leonardo_images"],
         )
         _render_automatic_image_row(
-            "Modern Implementation",
+            translate("concept.modern_implementation", get_current_language()),
             gallery_item["modern_images"],
         )
 
 
 st.set_page_config(
-    page_title="Gallery",
+    page_title=translate(
+        "gallery.page_title",
+        st.session_state.get(LANGUAGE_SESSION_KEY, DEFAULT_LANGUAGE),
+    ),
     page_icon="🗂",
     layout="wide"
 )
 
 init_db()
+initialize_session_state()
 
-st.title("🗂 Saved Image Gallery")
-st.write("Browse all saved Leonardo sketches and modern blueprints.")
+with st.sidebar:
+    render_language_selector()
+
+language = get_current_language()
+st.title(f"🗂 {translate('gallery.title', language)}")
+st.write(translate("gallery.description", language))
 
 filter_option = st.selectbox(
-    "Filter images",
-    ["All", "Leonardo", "Blueprint", "Favorites"]
+    translate("gallery.filter", language),
+    ["all", "leonardo", "blueprint", "favorites"],
+    format_func=lambda value: translate(f"gallery.filter.{value}", language),
 )
 
 all_images = get_all_images()
 concept_gallery_items = []
-if filter_option in {"All", "Favorites"}:
+if filter_option in {"all", "favorites"}:
     concept_gallery_items = build_concept_gallery_items(
         list_recent_concepts(limit=-1),
         all_images,
-        favorites_only=filter_option == "Favorites",
+        favorites_only=filter_option == "favorites",
     )
 
-if filter_option == "All":
+if filter_option == "all":
     images = all_images
-elif filter_option == "Leonardo":
+elif filter_option == "leonardo":
     images = get_images_by_type("leonardo")
-elif filter_option == "Blueprint":
+elif filter_option == "blueprint":
     images = get_images_by_type("blueprint")
 else:
     images = get_favorite_images()
@@ -90,15 +103,15 @@ else:
 images = exclude_automatic_concept_images(images, image_type_index=2)
 
 if not concept_gallery_items and not images:
-    st.info("No images found for this filter.")
+    st.info(translate("gallery.no_images", language))
 else:
     if concept_gallery_items:
-        st.subheader("Generated Concepts")
+        st.subheader(translate("gallery.generated_concepts", language))
         for gallery_item in concept_gallery_items:
             _render_concept_gallery_item(gallery_item)
 
     if concept_gallery_items and images:
-        st.subheader("Saved Images")
+        st.subheader(translate("gallery.saved_images", language))
 
 if images:
     cols = st.columns(2)
@@ -114,29 +127,30 @@ if images:
 
         with cols[idx % 2]:
             star_prefix = "⭐ " if is_favorite else ""
-            st.markdown(f"### {star_prefix}{image_type.capitalize()}")
+            image_type_label = translate(f"gallery.type.{image_type}", language)
+            st.markdown(f"### {star_prefix}{image_type_label}")
 
             st.image(
                 image_bytes,
-                caption=f"{image_type.capitalize()} • Concept ID: {concept_id}",
+                caption=f"{image_type_label} • {translate('gallery.concept_id', language)}: {concept_id}",
                 use_container_width=True
             )
 
-            with st.expander("Prompt"):
+            with st.expander(translate("common.prompt", language)):
                 st.code(prompt, language="text")
 
-            st.caption(f"Created: {created_at}")
+            st.caption(f"{translate('common.created', language)}: {created_at}")
 
             action1, action2, action3 = st.columns([1, 1, 1])
 
             with action1:
                 star_label = "⭐" if is_favorite else "☆"
-                if st.button(star_label, key=f"favorite_gallery_{image_id}", help="Favorite"):
+                if st.button(star_label, key=f"favorite_gallery_{image_id}", help=translate("common.favorite", language)):
                     toggle_image_favorite(image_id)
                     st.rerun()
 
             with action2:
-                if st.button("🗑", key=f"delete_gallery_{image_id}", help="Delete"):
+                if st.button("🗑", key=f"delete_gallery_{image_id}", help=translate("common.delete", language)):
                     delete_image_asset(image_id)
                     st.rerun()
 
@@ -147,5 +161,5 @@ if images:
                     file_name=f"{image_type}_{image_id}.png",
                     mime="image/png",
                     key=f"download_gallery_{image_id}",
-                    help="Download",
+                    help=translate("common.download", language),
                 )

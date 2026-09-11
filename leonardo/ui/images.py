@@ -1,5 +1,6 @@
 import streamlit as st
 
+from i18n import translate
 from application.images import (
     exclude_automatic_concept_images,
     list_concept_images,
@@ -8,27 +9,27 @@ from application.images import (
     toggle_visual_favorite,
 )
 from ui.components import render_result_box
-from ui.formatting import pretty_label
-from ui.state import BLUEPRINT_ASSET, LEONARDO_ASSET, get_current_concept_id
+from ui.state import BLUEPRINT_ASSET, LEONARDO_ASSET, get_current_concept_id, get_current_language
 
 
 def render_generated_visuals():
     if not st.session_state[LEONARDO_ASSET] and not st.session_state[BLUEPRINT_ASSET]:
         return
 
-    st.markdown("## Generated Visual Assets")
+    language = get_current_language()
+    st.markdown(f"## {translate('images.generated_assets', language)}")
 
     if st.session_state[LEONARDO_ASSET]:
-        render_result_box("Leonardo Visual Asset", "Generated image based on the Renaissance sketch prompt.")
+        render_result_box(translate("images.leonardo_asset", language), translate("images.leonardo_asset_description", language))
         st.image(
             st.session_state[LEONARDO_ASSET]["image_bytes"],
-            caption="Leonardo Sketch",
+            caption=translate("images.leonardo_caption", language),
             use_container_width=True,
         )
 
         action1, action2, action3 = st.columns([1, 1, 6])
         with action1:
-            if st.button("⭐", key="save_leonardo_image", help="Save Leonardo image"):
+            if st.button("⭐", key="save_leonardo_image", help=translate("images.save_leonardo", language)):
                 current_concept_id = get_current_concept_id()
                 if current_concept_id:
                     save_visual(
@@ -36,28 +37,28 @@ def render_generated_visuals():
                         "leonardo",
                         st.session_state[LEONARDO_ASSET],
                     )
-                    st.success("Saved.")
+                    st.success(translate("images.saved", language))
                 else:
-                    st.error("No concept selected.")
+                    st.error(translate("images.no_concept", language))
         with action2:
-            if st.button("🗑", key="clear_leonardo_asset", help="Clear Leonardo asset"):
+            if st.button("🗑", key="clear_leonardo_asset", help=translate("images.clear_leonardo", language)):
                 st.session_state[LEONARDO_ASSET] = None
                 st.rerun()
         with action3:
-            with st.expander("Prompt"):
+            with st.expander(translate("common.prompt", language)):
                 st.code(st.session_state[LEONARDO_ASSET]["prompt"], language="text")
 
     if st.session_state[BLUEPRINT_ASSET]:
-        render_result_box("Blueprint Visual Asset", "Generated image based on the modern blueprint prompt.")
+        render_result_box(translate("images.blueprint_asset", language), translate("images.blueprint_asset_description", language))
         st.image(
             st.session_state[BLUEPRINT_ASSET]["image_bytes"],
-            caption="Modern Blueprint",
+            caption=translate("images.blueprint_caption", language),
             use_container_width=True,
         )
 
         action1, action2, action3 = st.columns([1, 1, 6])
         with action1:
-            if st.button("⭐", key="save_blueprint_image", help="Save Blueprint image"):
+            if st.button("⭐", key="save_blueprint_image", help=translate("images.save_blueprint", language)):
                 current_concept_id = get_current_concept_id()
                 if current_concept_id:
                     save_visual(
@@ -65,25 +66,26 @@ def render_generated_visuals():
                         "blueprint",
                         st.session_state[BLUEPRINT_ASSET],
                     )
-                    st.success("Saved.")
+                    st.success(translate("images.saved", language))
                 else:
-                    st.error("No concept selected.")
+                    st.error(translate("images.no_concept", language))
         with action2:
-            if st.button("🗑", key="clear_blueprint_asset", help="Clear Blueprint asset"):
+            if st.button("🗑", key="clear_blueprint_asset", help=translate("images.clear_blueprint", language)):
                 st.session_state[BLUEPRINT_ASSET] = None
                 st.rerun()
         with action3:
-            with st.expander("Prompt"):
+            with st.expander(translate("common.prompt", language)):
                 st.code(st.session_state[BLUEPRINT_ASSET]["prompt"], language="text")
 
 
 def render_saved_images():
-    st.markdown("## Saved Images")
+    language = get_current_language()
+    st.markdown(f"## {translate('images.saved_images', language)}")
 
     current_concept_id = get_current_concept_id()
 
     if not current_concept_id:
-        st.info("No concept selected.")
+        st.info(translate("images.no_concept", language))
         return
 
     images = exclude_automatic_concept_images(
@@ -91,7 +93,7 @@ def render_saved_images():
     )
 
     if not images:
-        st.info("No saved images yet.")
+        st.info(translate("images.none_saved", language))
         return
 
     cols = st.columns(2)
@@ -104,11 +106,12 @@ def render_saved_images():
 
         with cols[idx % 2]:
             star_prefix = "⭐ " if is_favorite else ""
-            st.markdown(f"### {star_prefix}{pretty_label(image_type)}")
+            image_type_label = translate(f"gallery.type.{image_type}", language)
+            st.markdown(f"### {star_prefix}{image_type_label}")
 
             st.image(
                 image_bytes,
-                caption=pretty_label(image_type),
+                caption=image_type_label,
                 use_container_width=True,
             )
 
@@ -119,12 +122,12 @@ def render_saved_images():
                     toggle_visual_favorite(image_id)
                     st.rerun()
             with col2:
-                if st.button("🗑", key=f"delete_image_{image_id}", help="Delete image"):
+                if st.button("🗑", key=f"delete_image_{image_id}", help=translate("common.delete", language)):
                     remove_visual(image_id)
                     st.rerun()
             with col3:
                 st.download_button(
-                    label="Download",
+                    label=translate("common.download", language),
                     data=image_bytes,
                     file_name=f"{image_type}_{image_id}.png",
                     mime="image/png",

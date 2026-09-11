@@ -1,4 +1,8 @@
 from config import DIFFICULTY, MATERIALS, USE_CASES
+from services.fallback_translations import (
+    build_localized_fallback_concept,
+    normalize_fallback_language,
+)
 
 
 _DEFAULT_PROMPT = "a practical idea that requires a clearer user brief"
@@ -458,7 +462,27 @@ def _build_implementation_guide(
     }
 
 
-def build_fallback_concept(category, prompt_text, creativity_mode, audience):
+def build_fallback_concept(
+    category,
+    prompt_text,
+    creativity_mode,
+    audience,
+    language="en",
+):
+    normalized_language = normalize_fallback_language(language)
+    if normalized_language != "en":
+        category_text = _normalize_text(category, _DEFAULT_CATEGORY)
+        return build_localized_fallback_concept(
+            language=normalized_language,
+            category=category,
+            prompt_text=prompt_text,
+            creativity_mode=creativity_mode,
+            audience=audience,
+            mode=_resolve_creativity_mode(creativity_mode),
+            difficulty=generate_difficulty(category_text, creativity_mode),
+            modern_difficulty=generate_modern_difficulty(category_text),
+        )
+
     prompt = _normalize_text(prompt_text, _DEFAULT_PROMPT)
     audience_text = _normalize_text(audience, _DEFAULT_AUDIENCE)
     category_text = _normalize_text(category, _DEFAULT_CATEGORY)

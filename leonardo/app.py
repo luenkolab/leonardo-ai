@@ -4,11 +4,12 @@
 
 import streamlit as st
 
+from i18n import translate
 from ui.concept_page import generate_or_load_concept, render_concept_result
-from ui.home import render_banner, render_empty_concept_area, render_system_status
+from ui.home import render_banner, render_empty_concept_area
 from ui.images import render_saved_images
 from ui.sidebar import render_controls
-from ui.state import get_current_page, initialize_session_state
+from ui.state import get_current_language, get_current_page, initialize_session_state
 from ui.styles import apply_global_styles
 from database import init_db
 
@@ -43,11 +44,9 @@ category, creativity_mode, audience, user_prompt, generate, regenerate = render_
 render_banner()
 
 if get_current_page() == "gallery":
-    st.markdown("## Gallery")
+    st.markdown(f"## {translate('gallery.page_title', get_current_language())}")
     render_saved_images()
     st.stop()
-
-render_system_status()
 
 concept_data = generate_or_load_concept(
     category=category,

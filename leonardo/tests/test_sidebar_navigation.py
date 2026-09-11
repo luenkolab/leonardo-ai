@@ -1,5 +1,7 @@
 from contextlib import nullcontext
+import inspect
 
+from i18n import TRANSLATIONS
 from ui import sidebar
 
 
@@ -30,3 +32,15 @@ def test_custom_gallery_button_switches_to_grouped_gallery_page(monkeypatch):
 
     assert switched_pages == ["pages/Gallery.py"]
     assert internal_page_updates == []
+
+
+def test_included_output_presentation_block_is_removed():
+    source = inspect.getsource(sidebar.render_controls)
+
+    assert "sidebar.included" not in source
+    assert "included." not in source
+    assert all(
+        "sidebar.included" not in catalog
+        and not any(key.startswith("included.") for key in catalog)
+        for catalog in TRANSLATIONS.values()
+    )

@@ -25,12 +25,14 @@ def generate_and_save_concept(
     creativity_mode,
     audience,
     user_prompt,
+    language="en",
 ) -> tuple[dict, int]:
     concept_data = generate_concept(
         category=category,
         creativity_mode=creativity_mode,
         audience=audience,
         user_prompt=user_prompt,
+        language=language,
     )
 
     concept_id = save_concept(

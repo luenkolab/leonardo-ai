@@ -1,5 +1,7 @@
 import streamlit as st
 
+from i18n import DEFAULT_LANGUAGE, LANGUAGE_SESSION_KEY, normalize_language
+
 
 CURRENT_CONCEPT = "current_concept"
 CURRENT_CONCEPT_ID = "current_concept_id"
@@ -8,6 +10,7 @@ BLUEPRINT_ASSET = "blueprint_visual_asset"
 CURRENT_PAGE = "page"
 AUTO_IMAGE_PENDING_CONCEPT_ID = "auto_image_pending_concept_id"
 AUTO_IMAGE_ERRORS = "auto_image_errors"
+LANGUAGE = LANGUAGE_SESSION_KEY
 
 _LEGACY_LOADED_CONCEPT = "loaded_concept"
 _LEGACY_GENERATED_CONCEPT = "generated_concept"
@@ -38,6 +41,11 @@ def initialize_session_state() -> None:
 
     if AUTO_IMAGE_ERRORS not in st.session_state:
         st.session_state[AUTO_IMAGE_ERRORS] = {}
+
+    if LANGUAGE not in st.session_state:
+        st.session_state[LANGUAGE] = DEFAULT_LANGUAGE
+    else:
+        st.session_state[LANGUAGE] = normalize_language(st.session_state[LANGUAGE])
 
 
 def set_current_concept(concept_data, concept_id) -> None:
@@ -72,6 +80,10 @@ def get_current_page() -> str:
 
 def set_current_page(page: str) -> None:
     st.session_state[CURRENT_PAGE] = page
+
+
+def get_current_language() -> str:
+    return normalize_language(st.session_state.get(LANGUAGE, DEFAULT_LANGUAGE))
 
 
 def start_automatic_image_generation(concept_id: int) -> None:

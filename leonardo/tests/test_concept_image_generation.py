@@ -706,10 +706,7 @@ def test_invalid_image_payload_is_rejected(monkeypatch):
         raise AssertionError("Unreadable image bytes must be rejected")
 
 
-def test_slot_renders_saved_loading_error_and_placeholder_states(
-    png_bytes,
-    monkeypatch,
-):
+def test_slot_renders_saved_and_neutral_empty_states(png_bytes, monkeypatch):
     rendered = []
     monkeypatch.setattr(
         concept_page.st,
@@ -717,31 +714,32 @@ def test_slot_renders_saved_loading_error_and_placeholder_states(
         lambda body, **kwargs: rendered.append((body, kwargs)),
     )
     image_type = "leonardo_concept_1"
+    accessible_label = "Leonardo Vision 1"
 
     concept_page._render_concept_image_slot(
         image_type,
-        "Leonardo scene image 1",
+        accessible_label,
         {image_type: _image_record(1, image_type, png_bytes)},
         False,
         {},
     )
     concept_page._render_concept_image_slot(
         image_type,
-        "Leonardo scene image 1",
+        accessible_label,
         {},
         True,
         {},
     )
     concept_page._render_concept_image_slot(
         image_type,
-        "Leonardo scene image 1",
+        accessible_label,
         {},
         False,
         {image_type: "mock failure"},
     )
     concept_page._render_concept_image_slot(
         image_type,
-        "Leonardo scene image 1",
+        accessible_label,
         {},
         False,
         {},
@@ -749,7 +747,55 @@ def test_slot_renders_saved_loading_error_and_placeholder_states(
 
     assert '<img src="data:image/png;base64,' in rendered[0][0]
     assert 'aria-busy="true"' in rendered[1][0]
-    assert "Generating image…" in rendered[1][0]
-    assert "Image generation failed" in rendered[2][0]
-    assert ">Leonardo scene image 1</div>" in rendered[3][0]
+    assert "concept-image-slot--loading" in rendered[1][0]
+    assert "concept-image-slot--error" in rendered[2][0]
+    assert rendered[3][0].endswith("></div>")
     assert all(kwargs == {"unsafe_allow_html": True} for _, kwargs in rendered)
+
+    rendered_html = "\n".join(body for body, _ in rendered)
+    for removed_text in (
+        "Leonardo scene image",
+        "Modern use-case image",
+        "Generating image…",
+        "Image generation failed",
+    ):
+        assert removed_text not in rendered_html
+
+
+def test_result_sections_render_three_slots_for_each_image_family(
+    valid_concept,
+    monkeypatch,
+):
+    rendered_types = []
+    monkeypatch.setattr(
+        concept_page,
+        "_render_concept_image_slot",
+        lambda image_type, *args: rendered_types.append(image_type),
+    )
+    monkeypatch.setattr(
+        concept_page.st,
+        "container",
+        lambda **kwargs: nullcontext(),
+    )
+    monkeypatch.setattr(
+        concept_page.st,
+        "columns",
+        lambda count: [nullcontext() for _ in range(count)],
+    )
+    monkeypatch.setattr(concept_page.st, "markdown", lambda *args, **kwargs: None)
+    monkeypatch.setattr(concept_page.st, "caption", lambda *args, **kwargs: None)
+    monkeypatch.setattr(concept_page, "render_result_box", lambda *args, **kwargs: None)
+
+    concept_page._render_leonardo_vision(valid_concept, {}, False, {})
+    concept_page._render_modern_implementation(
+        valid_concept,
+        valid_concept["title"],
+        {},
+        False,
+        {},
+    )
+
+    assert tuple(rendered_types) == (
+        *application_images.LEONARDO_CONCEPT_IMAGE_TYPES,
+        *application_images.MODERN_CONCEPT_IMAGE_TYPES,
+    )

@@ -6,9 +6,11 @@ from pathlib import Path
 import pytest
 
 from config import CATEGORIES
-from services import concept_service, fallback_service
+from i18n import LANGUAGES
+from services import concept_service, fallback_service, fallback_translations
 from services.concept_schema import ConceptData, validate_concept_data
 from services.fallback_service import build_fallback_concept
+from services.fallback_translations import SUPPORTED_FALLBACK_LANGUAGES
 
 
 BASE_ARGUMENTS = {
@@ -19,11 +21,136 @@ BASE_ARGUMENTS = {
 }
 
 
+def _all_text_values(value):
+    if isinstance(value, dict):
+        for nested in value.values():
+            yield from _all_text_values(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _all_text_values(nested)
+    elif isinstance(value, str):
+        yield value
+
+
 def test_same_input_is_deterministic():
     first = build_fallback_concept(**BASE_ARGUMENTS)
     second = build_fallback_concept(**BASE_ARGUMENTS)
 
     assert first == second
+
+
+def test_english_fallback_preserves_existing_output():
+    result = build_fallback_concept(**BASE_ARGUMENTS, language="en")
+
+    assert result["title"].endswith("Balanced Concept")
+    assert result["leonardo_concept"].startswith(
+        "A preliminary fallback interpretation"
+    )
+    assert "This local fallback concept treats" in result["executive_summary"]
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "expected_text"),
+    [
+        ("ru", "умная система полива", "Эта локальная концепция"),
+        ("es", "sistema inteligente de riego", "Este concepto local"),
+        ("ja", "スマート給水システム", "このローカルコンセプト"),
+        ("zh", "智能灌溉系统", "此本地概念"),
+    ],
+)
+def test_localized_fallback_uses_selected_language(
+    language,
+    prompt,
+    expected_text,
+):
+    result = build_fallback_concept(
+        category="robotics",
+        prompt_text=prompt,
+        creativity_mode="Bold",
+        audience="Engineers",
+        language=language,
+    )
+
+    assert validate_concept_data(result) == result
+    assert prompt in result["executive_summary"]
+    assert expected_text in result["executive_summary"]
+
+
+def test_all_i18n_languages_have_schema_complete_fallbacks():
+    assert set(SUPPORTED_FALLBACK_LANGUAGES) == set(LANGUAGES)
+    required_template_keys = set(fallback_translations._ENGLISH_PACK)
+    assert all(
+        required_template_keys <= set(pack)
+        for pack in fallback_translations._PACKS.values()
+    )
+
+    for language in LANGUAGES:
+        result = build_fallback_concept(
+            category="robotics",
+            prompt_text="idea locale" if language != "en" else "local idea",
+            creativity_mode="Experimental",
+            audience="Students",
+            language=language,
+        )
+
+        assert validate_concept_data(result) == result
+        assert len(result) == 27
+        assert set(result) == set(ConceptData.model_fields)
+
+
+def test_unknown_language_falls_back_to_english():
+    unknown = build_fallback_concept(**BASE_ARGUMENTS, language="xx-unknown")
+    english = build_fallback_concept(**BASE_ARGUMENTS, language="en")
+
+    assert unknown == english
+
+
+def test_missing_localized_template_falls_back_to_english(monkeypatch):
+    monkeypatch.delitem(fallback_translations._PACKS["ru"], "market")
+
+    result = build_fallback_concept(
+        category="robotics",
+        prompt_text="умная система полива",
+        creativity_mode="Bold",
+        audience="Engineers",
+        language="ru",
+    )
+
+    assert result["market_demand"].startswith("Demand among")
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt"),
+    [
+        ("ru", "умная система полива"),
+        ("es", "sistema inteligente de riego"),
+        ("ja", "スマート給水システム"),
+    ],
+)
+def test_key_english_template_sentences_do_not_leak_into_localized_results(
+    language,
+    prompt,
+):
+    result = build_fallback_concept(
+        category="robotics",
+        prompt_text=prompt,
+        creativity_mode="Bold",
+        audience="Engineers",
+        language=language,
+    )
+    rendered_text = "\n".join(_all_text_values(result))
+
+    for english_fragment in (
+        "A preliminary fallback interpretation",
+        "This local fallback concept treats",
+        "The stated challenge is",
+        "Primary use case:",
+        "Fallback mode cannot establish",
+        "Timeline is undetermined in fallback mode",
+        "Not estimated in fallback mode",
+        "User need → explicit input",
+    ):
+        assert english_fragment not in rendered_text
 
 
 def test_different_prompts_change_meaningful_sections():
@@ -224,3 +351,23 @@ def test_ai_failure_returns_contextual_valid_fallback(monkeypatch, ai_behavior):
     assert "умная кормушка для домашних животных" in result["executive_summary"]
     assert "Older users" in result["executive_summary"]
     assert "Exploratory Concept" in result["title"]
+
+
+def test_concept_service_passes_selected_language_to_fallback(monkeypatch):
+    monkeypatch.setattr(
+        concept_service,
+        "generate_ai_concept",
+        lambda **kwargs: (_ for _ in ()).throw(TimeoutError("mock timeout")),
+    )
+
+    result = concept_service.generate_concept(
+        category="robotics",
+        creativity_mode="Bold",
+        audience="Engineers",
+        user_prompt="умная система полива",
+        language="ru",
+    )
+
+    assert validate_concept_data(result) == result
+    assert "Эта локальная концепция" in result["executive_summary"]
+    assert "Инженеры" in result["executive_summary"]

@@ -10,6 +10,7 @@ def generate_concept(
     creativity_mode,
     audience,
     user_prompt,
+    language="en",
 ):
     """
     Main concept generation logic
@@ -23,6 +24,7 @@ def generate_concept(
             creativity_mode=creativity_mode,
             audience=audience,
             user_prompt=user_prompt,
+            language=language,
         )
         return validate_concept_data(concept)
 
@@ -36,6 +38,7 @@ def generate_concept(
         prompt_text=user_prompt,
         creativity_mode=creativity_mode,
         audience=audience,
+        language=language,
     )
 
     try:
