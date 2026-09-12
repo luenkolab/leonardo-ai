@@ -28,7 +28,7 @@ def _to_safe_js_string(value: object) -> str:
 
 def render_voice_prompt():
     language = get_current_language()
-    speak = st.button(f"🎙 {translate('voice.prompt', language)}", use_container_width=True)
+    speak = st.button(translate('voice.prompt', language), key="voice_prompt", use_container_width=True)
 
     if speak:
         script = """

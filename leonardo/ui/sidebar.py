@@ -8,7 +8,7 @@ from application.concepts import (
     toggle_concept_favorite,
 )
 from config import CATEGORIES
-from i18n import LANGUAGES, language_display_name, translate
+from i18n import LANGUAGES, translate
 from ui.formatting import safe_text
 from ui.state import (
     LANGUAGE,
@@ -29,13 +29,14 @@ def render_language_selector():
         translate("language", language),
         list(LANGUAGES),
         key=LANGUAGE,
-        format_func=language_display_name,
+        format_func=lambda value: LANGUAGES[value]["name"],
+        label_visibility="collapsed",
     )
 
 
 def render_previous_concepts_sidebar():
     language = get_current_language()
-    with st.expander(f"📦 {translate('sidebar.previous_concepts', language)}", expanded=False, key="previous_concepts"):
+    with st.expander(translate('sidebar.previous_concepts', language), expanded=False, key="previous_concepts"):
         concepts = list_recent_concepts()
 
         if not concepts:
@@ -43,12 +44,12 @@ def render_previous_concepts_sidebar():
             return
 
         for concept_id, title, category, created_at, is_favorite in concepts:
-            star = "⭐" if is_favorite else ""
+            favorite_marker = '<span class="mini-card-favorite" aria-hidden="true"></span>' if is_favorite else ""
 
             st.markdown(
                 f"""
 <div class="mini-card">
-    <h4>{star} {safe_text(title)}</h4>
+    <h4>{favorite_marker}{safe_text(title)}</h4>
     <div class="small-note">
         {safe_text(translate('common.category', language))}: {safe_text(translate(f'option.category.{category}', language))}<br>
         {safe_text(translate('common.created', language))}: {safe_text(created_at)}
@@ -61,7 +62,7 @@ def render_previous_concepts_sidebar():
             c1, c2, c3 = st.columns(3)
 
             with c1:
-                if st.button("📂", key=f"open_concept_{concept_id}", use_container_width=True, help=translate("sidebar.previous_concepts", language)):
+                if st.button(" ", key=f"open_concept_{concept_id}", use_container_width=True, help=translate("sidebar.previous_concepts", language)):
                     try:
                         selected_concept = load_concept(concept_id)
                     except ConceptLoadError:
@@ -76,13 +77,12 @@ def render_previous_concepts_sidebar():
                             st.rerun()
 
             with c2:
-                star_label = "⭐" if is_favorite else "☆"
-                if st.button(star_label, key=f"favorite_concept_{concept_id}", use_container_width=True, help=translate("common.favorite", language)):
+                if st.button(" ", key=f"favorite_concept_{concept_id}", use_container_width=True, help=translate("common.favorite", language)):
                     toggle_concept_favorite(concept_id)
                     st.rerun()
 
             with c3:
-                if st.button("🗑", key=f"delete_concept_{concept_id}", use_container_width=True, help=translate("common.delete", language)):
+                if st.button(" ", key=f"delete_concept_{concept_id}", use_container_width=True, help=translate("common.delete", language)):
                     remove_concept(concept_id)
                     if get_current_concept_id() == concept_id:
                         clear_current_concept()
@@ -94,8 +94,8 @@ def render_controls():
         render_language_selector()
         language = get_current_language()
 
-        nav1 = st.button(f"⌂  {translate('nav.app', language)}", key="nav_app", use_container_width=True)
-        nav2 = st.button(f"▧  {translate('nav.gallery', language)}", key="nav_gallery", use_container_width=True)
+        nav1 = st.button(translate('nav.app', language), key="nav_app", use_container_width=True)
+        nav2 = st.button(translate('nav.gallery', language), key="nav_gallery", use_container_width=True)
 
         if nav1:
             set_current_page("app")
@@ -108,7 +108,7 @@ def render_controls():
 
         st.markdown('<div class="ornament-line"></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="sidebar-title">{translate("sidebar.control", language)}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="sidebar-group-title">⚙️ {translate("sidebar.concept_settings", language)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="sidebar-group-title sidebar-group-title--settings">{translate("sidebar.concept_settings", language)}</div>', unsafe_allow_html=True)
 
         category = st.selectbox(
             translate("sidebar.idea_category", language),
@@ -134,8 +134,8 @@ def render_controls():
             height=120,
         )
 
-        generate = st.button(f"✨ {translate('sidebar.generate', language)}", use_container_width=True, type="primary")
-        regenerate = st.button(f"🔄 {translate('sidebar.regenerate', language)}", use_container_width=True)
+        generate = st.button(translate('sidebar.generate', language), key="generate_idea", use_container_width=True, type="primary")
+        regenerate = st.button(translate('sidebar.regenerate', language), key="regenerate_idea", use_container_width=True)
 
         render_voice_prompt()
 

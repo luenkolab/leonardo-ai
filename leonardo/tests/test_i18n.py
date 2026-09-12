@@ -21,6 +21,10 @@ FEATURE_CARD_KEYS = (
     "home.feature.use_cases.text",
     "home.feature.investor.title",
     "home.feature.investor.text",
+    "home.feature.commercial_metrics.title",
+    "home.feature.commercial_metrics.text",
+    "home.feature.implementation_metrics.title",
+    "home.feature.implementation_metrics.text",
 )
 
 

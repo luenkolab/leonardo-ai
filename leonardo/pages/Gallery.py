@@ -15,7 +15,19 @@ from database import (
     toggle_image_favorite,
 )
 from ui.sidebar import render_language_selector
+from ui.formatting import safe_text
 from ui.state import get_current_language, initialize_session_state
+from ui.styles import apply_global_styles
+
+
+_GALLERY_HEADING_ICON = """
+<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <rect x="3" y="5" width="15" height="15" rx="2"/>
+    <path d="M7 5V3h14v14h-3"/>
+    <circle cx="8.5" cy="10" r="1.5"/>
+    <path d="m3 17 4.5-4.5 3.5 3.5 2.5-2.5L18 18"/>
+</svg>
+"""
 
 
 def _render_automatic_image_row(heading, images):
@@ -68,13 +80,22 @@ st.set_page_config(
 
 init_db()
 initialize_session_state()
+apply_global_styles()
 
 with st.sidebar:
     render_language_selector()
 
 language = get_current_language()
-st.title(f"🗂 {translate('gallery.title', language)}")
-st.write(translate("gallery.description", language))
+st.markdown(
+    f"""
+<h1 class="gallery-page-heading">
+    <span class="gallery-page-heading__icon">{_GALLERY_HEADING_ICON}</span>
+    <span>{safe_text(translate('gallery.title', language))}</span>
+</h1>
+<p class="gallery-page-description">{safe_text(translate('gallery.description', language))}</p>
+""",
+    unsafe_allow_html=True,
+)
 
 filter_option = st.selectbox(
     translate("gallery.filter", language),

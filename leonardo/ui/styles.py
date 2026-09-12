@@ -7,12 +7,23 @@ GLOBAL_CSS = """
 
 :root {
     --gold: #d9a84f;
-    --gold-soft: #f4d28a;
-    --bg: #06111f;
-    --panel: rgba(8, 22, 38, 0.92);
     --line: rgba(217, 168, 79, 0.34);
     --text: #f8e7c2;
-    --muted: #a8b3c3;
+    --control-background: linear-gradient(
+        180deg,
+        rgba(18, 35, 52, 0.98) 0%,
+        rgba(10, 23, 37, 0.98) 55%,
+        rgba(6, 17, 29, 0.98) 100%
+    );
+    --control-depth:
+        inset 0 1px 0 rgba(255, 235, 190, 0.06),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+    --control-hover-background: linear-gradient(
+        180deg,
+        rgba(23, 42, 60, 0.98) 0%,
+        rgba(13, 29, 45, 0.98) 55%,
+        rgba(8, 21, 34, 0.98) 100%
+    );
 }
 
 html, body, .stApp, [data-testid="stAppViewContainer"] {
@@ -35,7 +46,7 @@ footer,
 [data-testid="stToolbar"],
 [data-testid="stDecoration"],
 [data-testid="stStatusWidget"],
-[data-testid="stSidebarNav"],
+body:not(:has(.gallery-page-heading)) [data-testid="stSidebarNav"],
 .stDeployButton,
 button[data-testid="stBaseButton-headerNoPadding"],
 [data-testid="stSidebarCollapseButton"] {
@@ -55,22 +66,26 @@ button[data-testid="stBaseButton-headerNoPadding"],
 }
 
 .block-container {
-    max-width: 1600px !important;
-    padding-top: 0 !important;
     padding-bottom: 2.5rem !important;
-    padding-left: 1.45rem !important;
-    padding-right: 1.45rem !important;
     margin-top: 0 !important;
 }
 
-main .block-container {
+[data-testid="stMain"] [data-testid="stMainBlockContainer"] {
     min-width: 0 !important;
     width: 100% !important;
+    max-width: 1240px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
     box-sizing: border-box !important;
+    container-type: inline-size;
+    container-name: main-content;
 }
 
-[data-testid="stAppViewContainer"] {
-    overflow-x: auto !important;
+[data-testid="stMain"] {
+    min-width: 0 !important;
+    overflow-x: clip !important;
 }
 
 [data-testid="stVerticalBlock"] {
@@ -83,10 +98,12 @@ main .block-container {
 
 /* ---------- Sidebar ---------- */
 section[data-testid="stSidebar"] {
-    width: 340px !important;
-    min-width: 340px !important;
+    width: 370px !important;
+    min-width: 370px !important;
+    max-width: 370px !important;
     padding: 0 !important;
     margin: 0 !important;
+    overflow: visible !important;
     background: linear-gradient(180deg, rgba(6,17,31,0.99), rgba(5,13,24,0.99)) !important;
     border-right: 1px solid var(--line);
     box-shadow: 8px 0 28px rgba(0,0,0,0.30);
@@ -101,9 +118,7 @@ section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
 
 section[data-testid="stSidebar"] .block-container {
     margin: 0 !important;
-    padding: 0.35rem 1.15rem 1rem 1.15rem !important;
     min-width: auto !important;
-    max-width: none !important;
     min-height: 100vh !important;
     border-left: 1px solid rgba(217,168,79,0.34);
     border-right: 1px solid rgba(217,168,79,0.34);
@@ -115,6 +130,18 @@ section[data-testid="stSidebar"] .block-container {
     box-sizing: border-box !important;
 }
 
+section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+section[data-testid="stSidebar"] .block-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 22px 8px !important;
+    box-sizing: border-box !important;
+    overflow-x: visible !important;
+    overflow-y: hidden !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
+section[data-testid="stSidebar"] [data-testid="stElementContainer"],
 section[data-testid="stSidebar"] .stMarkdown,
 section[data-testid="stSidebar"] [data-testid="stExpander"],
 section[data-testid="stSidebar"] [data-testid="stSelectbox"],
@@ -123,14 +150,13 @@ section[data-testid="stSidebar"] [data-testid="stButton"] {
     margin-left: 0 !important;
     margin-right: 0 !important;
     width: 100% !important;
+    max-width: 100% !important;
     box-sizing: border-box !important;
+    overflow: visible !important;
 }
 
-section[data-testid="stSidebar"] .sidebar-title,
-section[data-testid="stSidebar"] .sidebar-group-title,
-section[data-testid="stSidebar"] label {
-    padding-left: 0 !important;
-    margin-left: 0 !important;
+section[data-testid="stSidebar"] [data-testid="stElementContainer"] {
+    margin-bottom: 0 !important;
 }
 
 section[data-testid="stSidebar"] .block-container::before,
@@ -139,47 +165,77 @@ section[data-testid="stSidebar"] .block-container::after {
     content: none !important;
 }
 
-.language-row {
-    display: flex;
-    justify-content: center;
-    gap: 16px;
-    margin: 0.35rem 0 0.75rem 0;
-    font-size: 21px;
-}
-
-.ornament-line {
+section[data-testid="stSidebar"] .ornament-line {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(217,168,79,0.58), transparent);
-    margin: 1rem 0 1.2rem 0;
+    margin: 0.9rem 0 0.95rem !important;
 }
 
-.sidebar-title {
+section[data-testid="stSidebar"] .sidebar-title {
     font-family: "Cinzel", Georgia, serif;
     color: var(--gold);
-    font-size: 25px;
+    font-size: 22px !important;
     font-weight: 700;
     letter-spacing: 0.035em;
-    line-height: 1.25;
+    line-height: 1.1 !important;
     text-transform: uppercase;
-    margin-bottom: 1.1rem;
+    margin: calc(0.2rem + 4px) 0 0.85rem !important;
+    padding-left: 0 !important;
+    overflow-wrap: normal !important;
 }
 
-.sidebar-group-title {
+section[data-testid="stSidebar"] .sidebar-group-title {
     font-family: "Cinzel", Georgia, serif;
     color: var(--text);
-    font-size: 16px;
+    font-size: 14px !important;
     font-weight: 700;
     letter-spacing: 0.02em;
-    margin: 0.65rem 0 0.85rem 0;
+    margin: 0.55rem 0 !important;
+    padding-left: 0 !important;
 }
 
-section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] label {
+    margin: 0.35rem 0 0.18rem !important;
+    padding-left: 0 !important;
+    font-size: 12px !important;
+    color: #d6c6a5 !important;
+}
+
 section[data-testid="stSidebar"] .stMarkdown p {
     color: #d6c6a5 !important;
 }
 
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-section[data-testid="stSidebar"] textarea,
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    background: rgba(3, 10, 20, 0.78) !important;
+    border: 1px solid rgba(217,168,79,0.34) !important;
+    border-radius: 10px !important;
+    color: #f8e7c2 !important;
+    min-height: 38px !important;
+    height: 38px !important;
+}
+
+section[data-testid="stSidebar"] div[data-baseweb="select"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+section[data-testid="stSidebar"] textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 78px !important;
+    height: 78px !important;
+    box-sizing: border-box !important;
+    background: rgba(3, 10, 20, 0.78) !important;
+    border: 1px solid rgba(217,168,79,0.34) !important;
+    border-radius: 10px !important;
+    color: #f8e7c2 !important;
+    caret-color: auto !important;
+}
+
 section[data-testid="stSidebar"] input {
     background: rgba(3, 10, 20, 0.78) !important;
     border: 1px solid rgba(217,168,79,0.34) !important;
@@ -199,9 +255,58 @@ section[data-testid="stSidebar"] div[data-baseweb="select"] input::selection {
     background: transparent !important;
 }
 
-section[data-testid="stSidebar"] textarea {
-    min-height: 118px !important;
-    caret-color: auto !important;
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] {
+    background: linear-gradient(180deg, #0b1b2a 0%, #07111c 100%) !important;
+    box-shadow: inset 0 0 0 1px rgba(217,168,79,0.34) !important;
+}
+
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] > div,
+body:has(input[role="combobox"][aria-expanded="true"])
+[data-testid="stSelectboxVirtualDropdown"] {
+    background: transparent !important;
+}
+
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"],
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"] * {
+    color: #f3e7c4 !important;
+}
+
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"]:hover > div {
+    background: rgba(234, 215, 164, 0.08) !important;
+}
+
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"][aria-selected="true"] > div {
+    background: rgba(30, 48, 65, 0.95) !important;
+}
+
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"][aria-selected="true"],
+body:has(input[role="combobox"][aria-expanded="true"])
+div[data-baseweb="popover"] [role="option"][aria-selected="true"] * {
+    color: #ead7a4 !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stTextArea"]
+[data-testid="stTextAreaRootElement"]:focus-within {
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stTextArea"] textarea:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+section[data-testid="stSidebar"] [data-testid="stTextArea"]
+[data-testid="InputInstructions"] {
+    display: none !important;
 }
 
 div[data-testid="stButton"] > button {
@@ -227,8 +332,11 @@ div[data-testid="stButton"] > button[kind="primary"] {
     border: 1px solid rgba(255,229,166,0.75) !important;
 }
 
-main [data-testid="stImage"]:first-of-type {
-    margin: 0 0 1.1rem 0 !important;
+.st-key-main_banner [data-testid="stImage"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: 6 / 1;
+    margin: 12px 0 1.1rem 0 !important;
     border: 1px solid rgba(217,168,79,0.42);
     border-radius: 14px;
     overflow: hidden;
@@ -236,10 +344,10 @@ main [data-testid="stImage"]:first-of-type {
     box-shadow: 0 12px 36px rgba(0,0,0,0.34);
 }
 
-main [data-testid="stImage"]:first-of-type img {
+.st-key-main_banner [data-testid="stImage"] img {
     display: block;
-    width: 100%;
-    height: 150px;
+    width: 100% !important;
+    height: 100% !important;
     object-fit: cover;
     object-position: center;
 }
@@ -262,60 +370,8 @@ main [data-testid="stImage"]:first-of-type img {
     background: linear-gradient(90deg, rgba(217,168,79,0.82), transparent);
 }
 
-.status-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
-    gap: 18px;
-    margin-bottom: 1.25rem;
-}
-
-.status-card {
-    min-height: 76px;
-    padding: 9px 14px;
-    border-radius: 13px;
-    background: linear-gradient(180deg, rgba(12,32,50,0.88), rgba(8,22,38,0.86));
-    border: 1px solid rgba(217,168,79,0.25);
-    box-shadow: inset 0 0 28px rgba(217,168,79,0.04);
-}
-
-.status-title {
-    font-family: "Cinzel", Georgia, serif;
-    color: var(--text);
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    margin-bottom: 8px;
-    line-height: 1.35;
-}
-
-.status-desc {
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.55;
-}
-
 .concept-empty {
-    min-height: 220px;
-    border: 1px solid rgba(217,168,79,0.42);
-    border-radius: 16px;
-    padding: 34px 42px;
-    margin-bottom: 1.5rem;
-    background:
-        linear-gradient(90deg, rgba(5, 13, 24, 0.92) 0%, rgba(5, 13, 24, 0.72) 42%, rgba(5, 13, 24, 0.18) 100%),
-        url("concept_panel.png");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    box-shadow: inset 0 0 28px rgba(217,168,79,0.08), 0 8px 24px rgba(0,0,0,0.24);
-}
-
-.concept-empty p {
-    max-width: 560px;
-    color: #d7dce5;
-    font-size: 16px;
-    line-height: 1.75;
-    margin: 0.2rem 0 0.75rem 0;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+    display: none !important;
 }
 
 .result-box {
@@ -336,10 +392,7 @@ main [data-testid="stImage"]:first-of-type img {
 
 .st-key-voice_pause,
 .st-key-voice_resume,
-.st-key-voice_stop {
-    margin-top: 14px !important;
-}
-
+.st-key-voice_stop,
 .st-key-voice_summary,
 .st-key-voice_investor,
 .st-key-voice_engineering {
@@ -370,28 +423,41 @@ main [data-testid="stImage"]:first-of-type img {
     margin-bottom: 0;
 }
 
-.mini-card {
-    padding: 12px;
+.st-key-previous_concepts .mini-card {
+    padding: 7px 10px;
     border-radius: 12px;
-    background: rgba(8, 18, 31, 0.80);
-    border: 1px solid rgba(217,168,79,0.22);
-    color: white;
+    background: linear-gradient(
+        180deg,
+        rgba(15, 32, 49, 0.94) 0%,
+        rgba(10, 24, 39, 0.94) 56%,
+        rgba(7, 18, 31, 0.96) 100%
+    );
+    border: 1px solid rgba(217,168,79,0.34);
+    color: #d8cfbd;
     margin-bottom: 10px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 235, 190, 0.045),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.20),
+        0 6px 18px rgba(0,0,0,0.18);
 }
 
-.mini-card h4 {
-    color: #f8e7c2;
+.st-key-previous_concepts .mini-card h4 {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    color: #f3e7c4;
     font-family: "Cinzel", Georgia, serif;
     font-size: 15px;
     line-height: 1.3;
-    margin-top: 0;
+    margin: 0;
+    padding: 0 !important;
 }
 
-.small-note {
+.st-key-previous_concepts .small-note {
     font-size: 12px;
-    color: #9ca3af;
-    margin-top: 6px;
+    color: #c9c1b0;
+    line-height: 1.35;
+    margin-top: 2px;
 }
 
 div[data-testid="stExpander"] {
@@ -400,184 +466,21 @@ div[data-testid="stExpander"] {
     background: rgba(5, 13, 24, 0.52) !important;
 }
 
-/* ---------- FINAL SIDEBAR SAFETY PATCH ----------
-   Keeps every sidebar element inside the visible left panel.
-   This block must stay at the very end of CSS. */
-section[data-testid="stSidebar"] {
-    width: 370px !important;
-    min-width: 370px !important;
-    max-width: 370px !important;
-    overflow: visible !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
-section[data-testid="stSidebar"] .block-container {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding-left: 22px !important;
-    padding-right: 22px !important;
-    padding-top: 8px !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"],
-section[data-testid="stSidebar"] [data-testid="stElementContainer"],
-section[data-testid="stSidebar"] .stMarkdown,
-section[data-testid="stSidebar"] [data-testid="stExpander"],
-section[data-testid="stSidebar"] [data-testid="stSelectbox"],
-section[data-testid="stSidebar"] [data-testid="stTextArea"],
 section[data-testid="stSidebar"] [data-testid="stButton"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-}
-
-section[data-testid="stSidebar"] textarea,
-section[data-testid="stSidebar"] div[data-baseweb="select"] {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-title {
-    font-size: 24px !important;
-    line-height: 1.18 !important;
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-    overflow-wrap: normal !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-group-title,
-section[data-testid="stSidebar"] label {
-    margin-left: 0 !important;
-    padding-left: 0 !important;
-}
-
-section[data-testid="stSidebar"] .language-row,
-section[data-testid="stSidebar"] .ornament-line {
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-}
-
-/* ---------- Button spacing fix ---------- */
-section[data-testid="stSidebar"] [data-testid="stButton"] {
-    margin-top: 8px !important;
-    margin-bottom: 8px !important;
-}
-
-section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stExpander"] {
-    margin-top: 10px !important;
-}
-
-/* ---------- Compact sidebar / remove annoying sidebar scrolling ----------
-   This block must stay at the very end of CSS. */
-section[data-testid="stSidebar"] {
-    overflow: visible !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
-section[data-testid="stSidebar"] .block-container {
-    overflow-y: hidden !important;
-    padding-top: 0px !important;
-    padding-bottom: 8px !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-    gap: 0 !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stElementContainer"] {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-}
-
-section[data-testid="stSidebar"] .language-row {
-    margin: 0.1rem 0 0.35rem 0 !important;
-    font-size: 18px !important;
-}
-
-section[data-testid="stSidebar"] .ornament-line {
-    margin: 0.45rem 0 0.55rem 0 !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-title {
-    font-size: 22px !important;
-    line-height: 1.1 !important;
-    margin-bottom: 0.55rem !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-group-title {
-    font-size: 14px !important;
-    margin: 0.35rem 0 0.35rem 0 !important;
-}
-
-section[data-testid="stSidebar"] label {
-    font-size: 12px !important;
-    margin-bottom: 2px !important;
-}
-
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-    min-height: 38px !important;
-    height: 38px !important;
-}
-
-section[data-testid="stSidebar"] textarea {
-    min-height: 78px !important;
-    height: 78px !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stButton"] {
-    margin-top: 5px !important;
-    margin-bottom: 5px !important;
+    margin-top: 7px !important;
+    margin-bottom: 7px !important;
 }
 
 section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
     min-height: 38px !important;
     height: 38px !important;
-}
-
-section[data-testid="stSidebar"] [data-testid="stExpander"] {
-    margin-top: 6px !important;
-}
-
-/* ---------- Final sidebar spacing balance ----------
-   Slightly separates sections after compact mode. Keep at very end. */
-section[data-testid="stSidebar"] .language-row {
-    margin: 0.25rem 0 0.7rem 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
 }
 
 section[data-testid="stSidebar"] [data-testid="stExpander"] {
     margin-top: 8px !important;
     margin-bottom: 8px !important;
-}
-
-section[data-testid="stSidebar"] .ornament-line {
-    margin: 0.9rem 0 0.95rem 0 !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-title {
-    margin-top: 0.2rem !important;
-    margin-bottom: 0.85rem !important;
-}
-
-section[data-testid="stSidebar"] .sidebar-group-title {
-    margin-top: 0.55rem !important;
-    margin-bottom: 0.55rem !important;
-}
-
-section[data-testid="stSidebar"] label {
-    margin-top: 0.35rem !important;
-    margin-bottom: 0.18rem !important;
 }
 
 section[data-testid="stSidebar"] [data-testid="stSelectbox"] {
@@ -589,15 +492,7 @@ section[data-testid="stSidebar"] [data-testid="stTextArea"] {
     margin-bottom: 0.65rem !important;
 }
 
-section[data-testid="stSidebar"] [data-testid="stButton"] {
-    margin-top: 7px !important;
-    margin-bottom: 7px !important;
-}
-
-/* ---------- Final top alignment patch ----------
-   Pull sidebar content back to the top after spacing fixes. Keep at very end. */
 section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
-    padding-top: 0 !important;
     margin-top: 0 !important;
 }
 
@@ -614,30 +509,511 @@ section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
     overflow: hidden !important;
 }
 
-section[data-testid="stSidebar"] .language-row {
-    position: relative !important;
-    z-index: 9999 !important;
-    padding-top: 6px !important;
-    margin-top: 0 !important;
-    margin-bottom: 0.55rem !important;
-    min-height: 24px !important;
+/* ---------- Unified top sidebar navigation ---------- */
+
+section[data-testid="stSidebar"] .st-key-language {
+    margin-top: 12px !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app button,
+section[data-testid="stSidebar"] .st-key-nav_gallery button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 12px !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app button p,
+section[data-testid="stSidebar"] .st-key-nav_gallery button p {
+    width: 100% !important;
     display: flex !important;
     align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app button > div,
+section[data-testid="stSidebar"] .st-key-nav_gallery button > div,
+section[data-testid="stSidebar"] .st-key-nav_app button > div > span,
+section[data-testid="stSidebar"] .st-key-nav_gallery button > div > span,
+section[data-testid="stSidebar"] .st-key-nav_app button [data-testid="stMarkdownContainer"],
+section[data-testid="stSidebar"] .st-key-nav_gallery button [data-testid="stMarkdownContainer"] {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"] .st-key-language div[data-baseweb="select"] > div {
+    padding-left: 12px !important;
+    align-items: center !important;
+}
+
+section[data-testid="stSidebar"] .st-key-language div[data-baseweb="select"] > div > div:first-of-type {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+}
+
+section[data-testid="stSidebar"] .st-key-language div[data-baseweb="select"] > div::before,
+section[data-testid="stSidebar"] .st-key-nav_app button p::before,
+section[data-testid="stSidebar"] .st-key-nav_gallery button p::before,
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary p::before {
+    content: "" !important;
+    display: inline-block !important;
+    width: 21px !important;
+    min-width: 21px !important;
+    height: 21px !important;
+    flex: 0 0 21px !important;
+    background-color: #ead7a4 !important;
+    -webkit-mask-position: center !important;
+    -webkit-mask-repeat: no-repeat !important;
+    -webkit-mask-size: contain !important;
+    mask-position: center !important;
+    mask-repeat: no-repeat !important;
+    mask-size: contain !important;
+}
+
+section[data-testid="stSidebar"] .st-key-language div[data-baseweb="select"] > div::before {
+    margin-right: 10px !important;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9Z'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M3 12h18M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9Z'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app button p::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 11.5 9-7.5 9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 11.5 9-7.5 9 7.5M5.5 10v10h13V10M9.5 20v-6h5v6'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_gallery button p::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2'/%3E%3Ccircle cx='8.5' cy='9' r='1.5'/%3E%3Cpath d='m3 17 5-5 4 4 3-3 6 6'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='16' rx='2'/%3E%3Ccircle cx='8.5' cy='9' r='1.5'/%3E%3Cpath d='m3 17 5-5 4 4 3-3 6 6'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary p {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary > span {
+    position: relative !important;
+    width: 100% !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary > span > span:first-child {
+    position: absolute !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary > span > div {
+    width: calc(100% - 28px) !important;
+    margin-left: 0 !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary p::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2'/%3E%3C/svg%3E") !important;
+}
+
+/* ---------- Unified SVG system for the remaining sidebar controls ---------- */
+
+section[data-testid="stSidebar"] [data-testid="stButton"] button:not([kind="primary"]),
+section[data-testid="stSidebar"] [data-testid="stButton"] button:not([kind="primary"]) p,
+section[data-testid="stSidebar"] .sidebar-group-title--settings {
+    color: #ead7a4 !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app [data-testid="stButton"] button p,
+section[data-testid="stSidebar"] .st-key-nav_gallery [data-testid="stButton"] button p,
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary p,
+section[data-testid="stSidebar"] .st-key-regenerate_idea [data-testid="stButton"] button p,
+section[data-testid="stSidebar"] .st-key-voice_prompt [data-testid="stButton"] button p {
+    color: #f3e7c4 !important;
+}
+
+section[data-testid="stSidebar"] .st-key-language div[data-baseweb="select"] > div,
+section[data-testid="stSidebar"] .st-key-nav_app [data-testid="stButton"] > button,
+section[data-testid="stSidebar"] .st-key-nav_gallery [data-testid="stButton"] > button,
+section[data-testid="stSidebar"] .st-key-previous_concepts [data-testid="stExpander"] summary,
+section[data-testid="stSidebar"] .st-key-regenerate_idea [data-testid="stButton"] > button,
+section[data-testid="stSidebar"] .st-key-voice_prompt [data-testid="stButton"] > button,
+.st-key-previous_concepts [class*="st-key-open_concept_"] button,
+.st-key-previous_concepts [class*="st-key-favorite_concept_"] button,
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button {
+    background: var(--control-background) !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+section[data-testid="stSidebar"] .st-key-nav_app [data-testid="stButton"] > button:hover,
+section[data-testid="stSidebar"] .st-key-nav_gallery [data-testid="stButton"] > button:hover,
+section[data-testid="stSidebar"] .st-key-regenerate_idea [data-testid="stButton"] > button:hover,
+section[data-testid="stSidebar"] .st-key-voice_prompt [data-testid="stButton"] > button:hover {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 235, 190, 0.06),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+        0 8px 22px rgba(0, 0, 0, 0.20) !important;
+}
+
+section[data-testid="stSidebar"] .sidebar-group-title--settings,
+section[data-testid="stSidebar"] .st-key-generate_idea button p,
+section[data-testid="stSidebar"] .st-key-regenerate_idea button p,
+section[data-testid="stSidebar"] .st-key-voice_prompt button p {
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+section[data-testid="stSidebar"] .sidebar-group-title--settings::before,
+section[data-testid="stSidebar"] .st-key-generate_idea button p::before,
+section[data-testid="stSidebar"] .st-key-regenerate_idea button p::before,
+section[data-testid="stSidebar"] .st-key-voice_prompt button p::before,
+section[data-testid="stSidebar"] .mini-card-favorite,
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-open_concept_"] button [data-testid="stMarkdownContainer"]::before,
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-favorite_concept_"] button [data-testid="stMarkdownContainer"]::before,
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-delete_concept_"] button [data-testid="stMarkdownContainer"]::before {
+    content: "" !important;
+    display: inline-block !important;
+    width: 21px !important;
+    min-width: 21px !important;
+    height: 21px !important;
+    flex: 0 0 21px !important;
+    background-color: #ead7a4 !important;
+    -webkit-mask-position: center !important;
+    -webkit-mask-repeat: no-repeat !important;
+    -webkit-mask-size: contain !important;
+    mask-position: center !important;
+    mask-repeat: no-repeat !important;
+    mask-size: contain !important;
+}
+
+section[data-testid="stSidebar"] .sidebar-group-title--settings::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63h.01A1.7 1.7 0 0 0 10 3.08V3h4v.08a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9v.01A1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63h.01A1.7 1.7 0 0 0 10 3.08V3h4v.08a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9v.01A1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-generate_idea button p::before {
+    background-color: #1b1206 !important;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 22h4M8.5 15.5A7 7 0 1 1 15.5 15.5c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6M10 22h4M8.5 15.5A7 7 0 1 1 15.5 15.5c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-regenerate_idea button p::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-voice_prompt button p::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3' width='6' height='11' rx='3'/%3E%3Cpath d='M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .mini-card-favorite,
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-favorite_concept_"] button [data-testid="stMarkdownContainer"]::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z'/%3E%3C/svg%3E") !important;
+}
+
+/* ---------- Gallery page ---------- */
+
+body:has(.gallery-page-heading) [data-testid="stSidebarNav"] {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 12px 22px 0 !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stSidebarNavItems"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stSidebarNavLinkContainer"] {
+    border-radius: 11px !important;
+}
+
+body:has(.gallery-page-heading) a[data-testid="stSidebarNavLink"] {
+    min-height: 38px !important;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    color: #f3e7c4 !important;
+    background: var(--control-background) !important;
+    border: 1px solid rgba(217,168,79,0.30) !important;
+    border-radius: 11px !important;
+    box-shadow: var(--control-depth) !important;
+    text-decoration: none !important;
+}
+
+body:has(.gallery-page-heading) a[data-testid="stSidebarNavLink"] p {
+    color: #f3e7c4 !important;
+    text-transform: capitalize !important;
+}
+
+body:has(.gallery-page-heading) a[data-testid="stSidebarNavLink"] svg {
+    color: #ead7a4 !important;
+    fill: #ead7a4 !important;
+}
+
+body:has(.gallery-page-heading) a[data-testid="stSidebarNavLink"][aria-current="page"] {
+    color: #ead7a4 !important;
+    border-color: rgba(234,215,164,0.52) !important;
+    background: var(--control-background) !important;
+}
+
+body:has(.gallery-page-heading) a[data-testid="stSidebarNavLink"]:hover {
+    color: #f3e7c4 !important;
+    border-color: rgba(234,215,164,0.52) !important;
+    background: var(--control-hover-background) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stSidebarNavSeparator"] {
+    margin: 12px 0 0 !important;
+    background: linear-gradient(90deg, transparent, rgba(217,168,79,0.58), transparent) !important;
+}
+
+.gallery-page-heading {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    margin: 12px 0 0.35rem !important;
+    color: var(--gold) !important;
+    font-family: "Cinzel", Georgia, serif !important;
+    font-size: clamp(24px, 2.7vw, 34px) !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    letter-spacing: 0.025em !important;
+}
+
+.gallery-page-heading > span:last-child {
+    min-width: 0 !important;
+    overflow-wrap: break-word !important;
+}
+
+.gallery-page-heading__icon {
+    width: 30px !important;
+    min-width: 30px !important;
+    height: 30px !important;
+    display: inline-flex !important;
+    align-items: center !important;
     justify-content: center !important;
+    color: #ead7a4 !important;
 }
 
-/* ---------- Generated Concept image panel final fix ---------- */
-
-.concept-empty {
-    display: none !important;
+.gallery-page-heading__icon svg {
+    width: 30px !important;
+    height: 30px !important;
+    display: block !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
 }
 
-.concept-empty-image-box {
+.gallery-page-description {
+    margin: 0 0 1.2rem !important;
+    color: #a8b3c3 !important;
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] h2,
+body:has(.gallery-page-heading) [data-testid="stMain"] h3 {
+    color: var(--gold) !important;
+    font-family: "Cinzel", Georgia, serif !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] h4 {
+    color: #f3e7c4 !important;
+    font-family: "Cinzel", Georgia, serif !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stSelectbox"] label,
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stSelectbox"] label p {
+    color: #d6c6a5 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+    color: #f3e7c4 !important;
+    background: var(--control-background) !important;
+    border: 1px solid rgba(217,168,79,0.34) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stSelectbox"] svg {
+    color: #ead7a4 !important;
+    fill: #ead7a4 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpander"] {
+    color: #f3e7c4 !important;
+    background: linear-gradient(180deg, rgba(11,27,42,0.98) 0%, rgba(7,17,28,0.98) 100%) !important;
+    border-color: rgba(217,168,79,0.34) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpander"] summary {
+    color: #f3e7c4 !important;
+    background: var(--control-background) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpander"] summary:hover {
+    background: var(--control-hover-background) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpander"] summary p,
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpander"] summary svg {
+    color: #f3e7c4 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stExpanderDetails"] {
+    color: #f3e7c4 !important;
+    background: linear-gradient(180deg, rgba(11,27,42,0.72) 0%, rgba(7,17,28,0.78) 100%) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stCaptionContainer"],
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stCaptionContainer"] p {
+    color: #c9c1b0 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stImage"] {
+    overflow: hidden !important;
+    border: 1px solid rgba(217,168,79,0.30) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 0 rgba(255,235,190,0.04) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stAlert"],
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stCode"] {
+    color: #f3e7c4 !important;
+    background: linear-gradient(180deg, rgba(11,27,42,0.92) 0%, rgba(7,17,28,0.94) 100%) !important;
+    border: 1px solid rgba(217,168,79,0.30) !important;
+    border-radius: 11px !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stAlert"] p,
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-testid="stCode"] code {
+    color: #f3e7c4 !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] :is([data-testid="stButton"], [data-testid="stDownloadButton"]) > button {
+    color: #f3e7c4 !important;
+    background: var(--control-background) !important;
+    border-color: rgba(217,168,79,0.34) !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] :is([data-testid="stButton"], [data-testid="stDownloadButton"]) > button:hover {
+    background: var(--control-hover-background) !important;
+    border-color: rgba(234,215,164,0.52) !important;
+}
+
+body:has(.gallery-page-heading) :is(
+    a[data-testid="stSidebarNavLink"],
+    button,
+    summary,
+    input,
+    textarea
+):is(:focus, :focus-visible) {
+    outline: none !important;
+}
+
+body:has(.gallery-page-heading) :is(
+    a[data-testid="stSidebarNavLink"],
+    [data-testid="stMain"] button
+):is(:focus, :focus-visible) {
+    border-color: rgba(234,215,164,0.52) !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-baseweb="select"]:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] [data-baseweb="select"]:focus-within > div {
+    border-color: rgba(234,215,164,0.52) !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] :is(
+    [data-testid="stTextInputRootElement"],
+    [data-testid="stTextAreaRootElement"]
+):focus-within {
+    border-color: transparent !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+body:has(.gallery-page-heading) [data-testid="stMain"] summary:is(:focus, :focus-visible) {
+    box-shadow: none !important;
+}
+
+body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+}
+
+body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: none !important;
+}
+
+@container main-content (max-width: 799px) {
+    body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@container main-content (max-width: 559px) {
+    body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+@media (max-width: 1169px) {
+    body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 849px) {
+    body:has(.gallery-page-heading) [class*="st-key-gallery_concept_"] [data-testid="stHorizontalBlock"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-open_concept_"] button [data-testid="stMarkdownContainer"]::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h7l2 2h9v10H3V7ZM3 7V5h7l2 2'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7h7l2 2h9v10H3V7ZM3 7V5h7l2 2'/%3E%3C/svg%3E") !important;
+}
+
+section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-delete_concept_"] button [data-testid="stMarkdownContainer"]::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 3h6l1 4H8l1-4ZM6 7l1 14h10l1-14M10 11v6M14 11v6'/%3E%3C/svg%3E") !important;
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M9 3h6l1 4H8l1-4ZM6 7l1 14h10l1-14M10 11v6M14 11v6'/%3E%3C/svg%3E") !important;
+}
+
+/* ---------- Generated Concept image panel ---------- */
+
+.st-key-generated_concept_panel .concept-empty-image-box {
     position: relative !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 125px !important;
-    min-height: 125px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: 8 / 1;
+    container-type: inline-size;
+    display: grid !important;
+    grid-template-columns: minmax(0, 58cqw) minmax(0, 42cqw);
+    align-items: center;
     border: 1px solid rgba(217,168,79,0.42) !important;
     border-radius: 16px !important;
     margin-bottom: 1.35rem !important;
@@ -646,68 +1022,88 @@ section[data-testid="stSidebar"] .language-row {
     box-shadow: inset 0 0 28px rgba(217,168,79,0.08), 0 8px 24px rgba(0,0,0,0.24) !important;
 }
 
-.concept-empty-image {
+.st-key-generated_concept_panel .concept-empty-image {
     position: absolute !important;
     inset: 0 !important;
-    width: 104% !important;
-    height: 104% !important;
-    left: -2% !important;
-    top: -2% !important;
+    width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     object-fit: cover !important;
     object-position: center !important;
     z-index: 0 !important;
 }
 
-.concept-empty-image-box::after {
+.st-key-generated_concept_panel .concept-empty-image-box::after {
     content: "" !important;
     position: absolute !important;
     inset: 0 !important;
     background: linear-gradient(
         90deg,
-        rgba(5, 13, 24, 0.96) 0%,
-        rgba(5, 13, 24, 0.78) 38%,
-        rgba(5, 13, 24, 0.18) 100%
+        rgba(3, 11, 21, 0.96) 0%,
+        rgba(4, 14, 26, 0.90) 36%,
+        rgba(5, 17, 31, 0.56) 54%,
+        rgba(5, 17, 31, 0.08) 82%,
+        transparent 100%
     ) !important;
     z-index: 1 !important;
 }
 
-.concept-empty-text {
+.st-key-generated_concept_panel .concept-empty-text {
     position: relative !important;
     z-index: 2 !important;
-    padding: 16px 34px !important;
-    max-width: 620px !important;
+    grid-column: 1;
+    width: 58cqw;
+    max-width: none !important;
+    padding: 1.5cqw 2.4cqw !important;
+    box-sizing: border-box;
 }
 
-.concept-empty-text p {
-    max-width: 620px !important;
+.st-key-generated_concept_panel .concept-panel-line {
+    max-width: none !important;
     color: #f4d28a !important;
     font-family: "Cinzel", Georgia, serif !important;
-    font-size: 16px !important;
+    font-size: 1.55cqw !important;
     font-weight: 600 !important;
-    line-height: 1.65 !important;
+    line-height: 1.25 !important;
     text-align: left !important;
-    margin: 0.15rem 0 0.65rem 0 !important;
+    white-space: nowrap !important;
+    margin: 0 !important;
     text-shadow: 0 2px 10px rgba(0,0,0,0.75) !important;
 }
 
-/* ---------- Feature cards alignment fix ---------- */
+/* ---------- Feature cards ---------- */
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 6px;
+    row-gap: 8px;
+    align-items: stretch;
+    margin-bottom: 22px;
+}
 
 .feature-card {
-    min-height: 72px !important;
+    min-height: 58px !important;
     height: auto !important;
     line-height: 1.3 !important;
-    padding: 8px 14px !important;
+    padding: 8px 12px !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important;
+    justify-content: center !important;
     box-sizing: border-box !important;
-    margin-bottom: 22px !important;
+    margin-bottom: 0 !important;
 
-    background: linear-gradient(180deg, rgba(12,32,50,0.86), rgba(8,22,38,0.86)) !important;
+    background: linear-gradient(
+        180deg,
+        rgba(14, 32, 49, 0.88) 0%,
+        rgba(10, 25, 40, 0.88) 58%,
+        rgba(7, 20, 34, 0.88) 100%
+    ) !important;
     border: 1px solid rgba(217,168,79,0.22) !important;
     border-radius: 13px !important;
-    box-shadow: inset 0 0 24px rgba(217,168,79,0.035) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 235, 190, 0.035),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.16) !important;
 }
 
 .feature-title {
@@ -732,6 +1128,18 @@ section[data-testid="stSidebar"] .language-row {
     align-items: center !important;
     margin-right: 4px !important;
     font-size: 22px !important;
+    color: #ead7a4 !important;
+}
+
+.feature-icon svg {
+    width: 23px !important;
+    height: 23px !important;
+    display: block !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
 }
 
 .feature-text {
@@ -739,53 +1147,68 @@ section[data-testid="stSidebar"] .language-row {
     line-height: 1.25 !important;
     color: #a8b3c3 !important;
     font-size: 12px !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
 }
 
-.idea-block-leonardo {
-    padding: 22px;
-    border-radius: 18px;
-
-    background:
-        linear-gradient(
-            rgba(247,238,215,0.94),
-            rgba(234,223,196,0.94)
-        ),
-        url("https://www.transparenttextures.com/patterns/old-paper.png");
-
-    border: 1px solid rgba(120,90,40,0.25);
-
-    margin-bottom: 22px;
-
-    color:#2b2418;
-
-    box-shadow:
-        inset 0 0 30px rgba(0,0,0,0.05),
-        0 8px 24px rgba(0,0,0,0.12);
+/* Viewport fallback for the home feature grid. */
+@media (max-width: 1409px) {
+    .feature-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
-.idea-block-modern {
-
-    padding:22px;
-
-    border-radius:18px;
-
-    background:
-
-        linear-gradient(
-            rgba(7,17,31,0.95),
-            rgba(8,22,38,0.95)
-        );
-
-    border:1px solid rgba(59,130,246,0.25);
-
-    margin-bottom:22px;
-
-    box-shadow:
-        inset 0 0 40px rgba(59,130,246,0.08),
-        0 8px 24px rgba(0,0,0,0.25);
+@media (max-width: 1129px) {
+    .feature-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
-/* ---------- Release UI polish: isolated generated-result worlds ---------- */
+/* Main content-box thresholds keep three-column cards above roughly 323px
+   and two-column cards above roughly 352px before reflowing. */
+@container main-content (max-width: 999px) {
+    .st-key-generated_concept_panel .concept-empty-image-box::after {
+        background: linear-gradient(
+            90deg,
+            rgba(3, 11, 21, 0.98) 0%,
+            rgba(4, 14, 26, 0.94) 50%,
+            rgba(5, 17, 31, 0.62) 72%,
+            rgba(5, 17, 31, 0.24) 100%
+        ) !important;
+    }
+
+    .feature-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@container main-content (max-width: 719px) {
+    .st-key-generated_concept_panel .concept-empty-image-box::after {
+        background: linear-gradient(
+            90deg,
+            rgba(3, 11, 21, 0.99) 0%,
+            rgba(4, 14, 26, 0.96) 56%,
+            rgba(5, 17, 31, 0.76) 78%,
+            rgba(5, 17, 31, 0.52) 100%
+        ) !important;
+    }
+
+    .feature-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ---------- Generated-result sections ---------- */
+
+.st-key-previous_concepts [data-testid="stHorizontalBlock"] {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin-top: 10px !important;
+}
 
 .st-key-previous_concepts [class*="st-key-open_concept_"] button,
 .st-key-previous_concepts [class*="st-key-favorite_concept_"] button,
@@ -794,15 +1217,36 @@ section[data-testid="stSidebar"] .language-row {
     min-height: 32px !important;
     height: 32px !important;
     padding: 2px 6px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
     font-size: 0.8rem !important;
     line-height: 1 !important;
+    color: #f3e7c4 !important;
+    border-color: rgba(217,168,79,0.34) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
 }
 
-.st-key-previous_concepts [class*="st-key-open_concept_"] button p,
-.st-key-previous_concepts [class*="st-key-favorite_concept_"] button p,
-.st-key-previous_concepts [class*="st-key-delete_concept_"] button p {
+.st-key-previous_concepts [class*="st-key-open_concept_"] button:hover,
+.st-key-previous_concepts [class*="st-key-favorite_concept_"] button:hover,
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button:hover {
+    transform: none !important;
+    background: var(--control-hover-background) !important;
+    border-color: rgba(234, 215, 164, 0.52) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 235, 190, 0.08),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.24) !important;
+}
+
+.st-key-previous_concepts [class*="st-key-open_concept_"] button {
+    margin-left: 0 !important;
+}
+
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button {
+    margin-right: 0 !important;
+}
+
+.st-key-previous_concepts [class*="st-key-open_concept_"] button [data-testid="stMarkdownContainer"],
+.st-key-previous_concepts [class*="st-key-favorite_concept_"] button [data-testid="stMarkdownContainer"],
+.st-key-previous_concepts [class*="st-key-delete_concept_"] button [data-testid="stMarkdownContainer"] {
     font-size: 0.64rem !important;
     line-height: 1 !important;
 }
@@ -831,12 +1275,16 @@ section[data-testid="stSidebar"] .language-row {
         0 14px 34px rgba(0,0,0,0.24) !important;
 }
 
-.st-key-leonardo_section::before {
+.st-key-leonardo_section::before,
+.st-key-modern_section::before {
     content: "";
     position: absolute;
     inset: 0;
     z-index: 0;
     pointer-events: none;
+}
+
+.st-key-leonardo_section::before {
     opacity: 0.24;
     background-image:
         radial-gradient(rgba(242,228,198,0.09) 0.65px, transparent 0.65px),
@@ -844,7 +1292,8 @@ section[data-testid="stSidebar"] .language-row {
     background-size: 7px 7px, 100% 100%;
 }
 
-.st-key-leonardo_section > * {
+.st-key-leonardo_section > *,
+.st-key-modern_section > * {
     position: relative;
     z-index: 1;
 }
@@ -863,7 +1312,12 @@ section[data-testid="stSidebar"] .language-row {
     margin-bottom: 6px !important;
 }
 
-.st-key-leonardo_section [data-testid="stHorizontalBlock"] {
+.st-key-leonardo_section [data-testid="stHorizontalBlock"],
+.st-key-modern_section [data-testid="stHorizontalBlock"] {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 350px)) !important;
+    justify-content: center !important;
+    align-items: start !important;
     gap: 16px !important;
     margin-top: 18px !important;
     margin-bottom: 22px !important;
@@ -917,21 +1371,11 @@ section[data-testid="stSidebar"] .language-row {
 }
 
 .st-key-modern_section::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
     opacity: 0.18;
     background-image:
         linear-gradient(rgba(79,168,255,0.12) 1px, transparent 1px),
         linear-gradient(90deg, rgba(79,168,255,0.12) 1px, transparent 1px);
     background-size: 36px 36px;
-}
-
-.st-key-modern_section > * {
-    position: relative;
-    z-index: 1;
 }
 
 .st-key-modern_section h2 {
@@ -947,10 +1391,12 @@ section[data-testid="stSidebar"] .language-row {
     margin-bottom: 6px !important;
 }
 
-.st-key-modern_section [data-testid="stHorizontalBlock"] {
-    gap: 16px !important;
-    margin-top: 18px !important;
-    margin-bottom: 22px !important;
+.st-key-leonardo_section [data-testid="stHorizontalBlock"] > [data-testid="stColumn"],
+.st-key-modern_section [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 350px !important;
+    flex: none !important;
 }
 
 .st-key-leonardo_section [data-testid="stMarkdownContainer"]:has(.concept-image-slot),
@@ -961,6 +1407,7 @@ section[data-testid="stSidebar"] .language-row {
 .st-key-leonardo_section .concept-image-slot,
 .st-key-modern_section .concept-image-slot {
     width: 100%;
+    max-width: 350px;
     aspect-ratio: 1 / 1;
     box-sizing: border-box;
     display: flex;
@@ -970,6 +1417,8 @@ section[data-testid="stSidebar"] .language-row {
     overflow: hidden;
     border-radius: 12px;
     text-align: center;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .st-key-leonardo_section .concept-image-slot > img,
@@ -1027,6 +1476,39 @@ section[data-testid="stSidebar"] .language-row {
 .st-key-modern_section .result-text p,
 .st-key-modern_section .result-text li {
     color: #EEF6FF !important;
+}
+
+/* ---------- Main visual grid responsive geometry ---------- */
+
+/* Viewport fallback for browsers without container queries. */
+@media (max-width: 1549px) {
+    .st-key-leonardo_section [data-testid="stHorizontalBlock"],
+    .st-key-modern_section [data-testid="stHorizontalBlock"] {
+        grid-template-columns: repeat(2, minmax(0, 350px)) !important;
+    }
+}
+
+@media (max-width: 1183px) {
+    .st-key-leonardo_section [data-testid="stHorizontalBlock"],
+    .st-key-modern_section [data-testid="stHorizontalBlock"] {
+        grid-template-columns: minmax(0, min(350px, 100%)) !important;
+    }
+}
+
+/* The main content-box thresholds include each section's 28px side padding,
+   1px borders, and the 16px gaps between 350px image cards. */
+@container main-content (max-width: 1139px) {
+    .st-key-leonardo_section [data-testid="stHorizontalBlock"],
+    .st-key-modern_section [data-testid="stHorizontalBlock"] {
+        grid-template-columns: repeat(2, minmax(0, 350px)) !important;
+    }
+}
+
+@container main-content (max-width: 773px) {
+    .st-key-leonardo_section [data-testid="stHorizontalBlock"],
+    .st-key-modern_section [data-testid="stHorizontalBlock"] {
+        grid-template-columns: minmax(0, min(350px, 100%)) !important;
+    }
 }
 
 </style>
