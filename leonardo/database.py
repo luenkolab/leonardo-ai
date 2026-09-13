@@ -121,6 +121,16 @@ def get_concept_by_id(concept_id):
     return None
 
 
+def get_concept_prompt(concept_id):
+    """Return the original user prompt stored with a concept."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT prompt FROM concepts WHERE id = ?", (concept_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
 def save_image_asset(concept_id, image_type, prompt, image_bytes):
     conn = get_connection()
     cursor = conn.cursor()
@@ -149,6 +159,32 @@ def get_images_for_concept(concept_id):
         WHERE concept_id = ?
         ORDER BY is_favorite DESC, created_at DESC, id DESC
     """, (concept_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def get_images_for_concept_by_types(concept_id, image_types):
+    """Return concept-owned image records for the requested slot types."""
+    requested_types = tuple(image_types)
+    if concept_id is None or not requested_types:
+        return []
+
+    placeholders = ", ".join("?" for _ in requested_types)
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        f"""
+        SELECT id, concept_id, image_type, prompt, image_data, created_at, is_favorite
+        FROM project_images
+        WHERE concept_id = ?
+          AND image_type IN ({placeholders})
+        ORDER BY created_at DESC, id DESC
+        """,
+        (concept_id, *requested_types),
+    )
 
     rows = cursor.fetchall()
     conn.close()

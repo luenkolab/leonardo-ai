@@ -13,8 +13,53 @@ def _image_record(image_id, image_type, image_bytes=b"image"):
     return (image_id, image_type, "prompt", image_bytes, "test-date", 0)
 
 
+def _owned_image_record(image_id, concept_id, image_type, image_bytes=b"image"):
+    return (
+        image_id,
+        concept_id,
+        image_type,
+        "prompt",
+        image_bytes,
+        "test-date",
+        0,
+    )
+
+
 def _gallery_record(image_id, image_type, image_bytes=b"image"):
     return (image_id, 100, image_type, "prompt", image_bytes, "test-date", 0)
+
+
+def _save_concept(concept_data, title):
+    return database.save_concept(
+        title=title,
+        category="robotics",
+        prompt=f"prompt for {title}",
+        concept_data=concept_data,
+    )
+
+
+def _stub_automatic_prompts(monkeypatch):
+    monkeypatch.setattr(
+        application_images,
+        "build_design_blueprint",
+        lambda concept, original_user_prompt="": {},
+    )
+    monkeypatch.setattr(
+        application_images,
+        "build_leonardo_concept_image_prompts",
+        lambda concept, design_blueprint: {
+            image_type: image_type
+            for image_type in application_images.LEONARDO_CONCEPT_IMAGE_TYPES
+        },
+    )
+    monkeypatch.setattr(
+        application_images,
+        "build_modern_concept_image_prompts",
+        lambda concept, design_blueprint: {
+            image_type: image_type
+            for image_type in application_images.MODERN_CONCEPT_IMAGE_TYPES
+        },
+    )
 
 
 def _build_prompt_sets(concept_data):
@@ -32,6 +77,55 @@ def _build_prompt_sets(concept_data):
     )
 
 
+def _build_bridge_prompt_sets(valid_concept):
+    source_prompt = (
+        "Разработайте автономную модульную систему аварийных мостов для быстрого "
+        "развертывания после наводнений, землетрясений или оползней. Мост должен "
+        "перевозиться стандартными грузовиками, использовать роботизированную "
+        "сборку, солнечные датчики и мониторинг с ИИ."
+    )
+    bridge = {
+        **valid_concept,
+        "title": "Автономная модульная система аварийных мостов",
+        "modern_product_name": "Модульный Аварийный Мост",
+        "leonardo_concept": "Мост из быстро соединяемых модульных секций.",
+        "leonardo_sketch_description": (
+            "Мост через реку, модульные секции, опоры, подъемные механизмы и узлы соединения."
+        ),
+        "executive_summary": (
+            "Аварийный мост быстро восстанавливает переправу после природной катастрофы."
+        ),
+        "modern_principle": (
+            "Секции перевозятся грузовиками и собираются роботизированными модулями."
+        ),
+        "system_components": [
+            "Модули моста",
+            "Роботизированные сборочные устройства",
+            "Солнечные датчики",
+            "Система мониторинга с ИИ",
+        ],
+        "materials": ["Легкие перерабатываемые сплавы", "Композитные материалы"],
+        "technical_requirements": [
+            "Регулируемый пролет для разной ширины рек",
+            "Транспортировка стандартными грузовиками",
+        ],
+        "use_cases": [
+            "Гражданские спасательные операции после наводнения",
+            "Удаленные инфраструктурные проекты",
+        ],
+        "modern_sketch_description": (
+            "Чертеж полного моста, модульных соединений, солнечных датчиков и сборочных роботов."
+        ),
+    }
+    blueprint = image_service.build_design_blueprint(bridge, source_prompt)
+    return (
+        source_prompt,
+        blueprint,
+        image_service.build_leonardo_concept_image_prompts(bridge, blueprint),
+        image_service.build_modern_concept_image_prompts(bridge, blueprint),
+    )
+
+
 def test_six_prompt_roles_have_stable_type_mapping(valid_concept):
     _, leonardo_prompts, modern_prompts = _build_prompt_sets(valid_concept)
 
@@ -45,6 +139,60 @@ def test_six_prompt_roles_have_stable_type_mapping(valid_concept):
     assert all(valid_concept["title"] in prompt for prompt in leonardo_prompts.values())
     assert all(valid_concept["title"] in prompt for prompt in modern_prompts.values())
     assert application_images.CONCEPT_IMAGE_MAX_WORKERS == 2
+
+
+def test_bridge_prompts_lock_semantic_subject_and_source_fields(valid_concept):
+    source_prompt, blueprint, leonardo, modern = _build_bridge_prompt_sets(valid_concept)
+    prompts = {**leonardo, **modern}
+    visual_brief = blueprint["shared_invention_lineage"]["visual_brief"]
+
+    assert visual_brief["original_user_prompt"] == source_prompt
+    for field in (
+        "title_and_product",
+        "concept_summary",
+        "core_principle",
+        "components",
+        "materials",
+        "use_cases",
+        "sketch_and_blueprint_description",
+    ):
+        assert visual_brief[field] != "Not specified"
+
+    for prompt in prompts.values():
+        lowered = prompt.lower()
+        for anchor in ("modular", "emergency", "bridge", "rapid deployment"):
+            assert anchor in lowered
+        assert "damaged river crossing" in lowered
+        assert "visually dominant" in lowered
+        assert "standard trucks" in lowered
+        assert "robotic assembly" in lowered
+        assert "adjustable span" in lowered
+        assert "solar-powered structural sensors" in lowered
+        assert "ai-assisted monitoring" in lowered
+        assert "civilian rescue" in lowered
+        assert "remote-infrastructure" in lowered
+        assert "vending-machine-like enclosure" in lowered
+        for leaked_template_detail in (
+            "v-shaped wooden hopper",
+            "central cylindrical processing drum",
+            "three pull-out collection bins",
+            "panoramic safety-glass window",
+        ):
+            assert leaked_template_detail not in lowered
+
+
+def test_bridge_slots_have_six_distinct_visual_purposes(valid_concept):
+    _, _, leonardo, modern = _build_bridge_prompt_sets(valid_concept)
+
+    assert "complete modular emergency bridge" in leonardo["leonardo_concept_1"]
+    assert "modular joint" in leonardo["leonardo_concept_2"]
+    assert "civilian rescue" in leonardo["leonardo_concept_3"]
+    assert "already spanning" in modern["modern_concept_1"]
+    assert "standard trucks delivering bridge modules" in modern["modern_concept_2"]
+    assert "rescue vehicles, civilians, or infrastructure supplies" in modern[
+        "modern_concept_3"
+    ]
+    assert len(set(leonardo.values()) | set(modern.values())) == 6
 
 
 def test_shared_identity_is_concise_era_neutral_and_used_in_all_prompts(
@@ -64,14 +212,14 @@ def test_shared_identity_is_concise_era_neutral_and_used_in_all_prompts(
         "primary_users",
     )
     assert all(
-        design_blueprint["shared_invention_lineage"]["purpose"] in prompt
+        design_blueprint["shared_invention_lineage"]["primary_visual_subject"] in prompt
         for prompt in prompts.values()
     )
     assert all(len(value) <= 320 for value in identity.values())
     assert valid_concept["title"] in identity["primary_purpose"]
     assert valid_concept["target_users"][0] in identity["primary_users"]
     assert valid_concept["use_cases"][0] in identity["core_inputs"]
-    assert "selected era" in identity["main_physical_form"]
+    assert "generic machine or cabinet" in identity["main_physical_form"]
 
 
 def test_all_six_prompts_use_the_required_section_structure(valid_concept):
@@ -79,7 +227,7 @@ def test_all_six_prompts_use_the_required_section_structure(valid_concept):
     prompts = {**leonardo, **modern}
     section_headings = (
         "1. Design Blueprint — highest priority",
-        "2. Machine identity lock",
+        "2. Primary subject identity lock",
         "3. Exact image role",
         "4. Required scene and camera composition",
         "5. Required functional elements",
@@ -213,10 +361,10 @@ def test_within_set_continuity_is_explicit(valid_concept):
     _, leonardo, modern = _build_prompt_sets(valid_concept)
 
     for prompt in leonardo.values():
-        assert "same carved timber frame" in prompt
-        assert "same bronze or brass drive system" in prompt
+        assert "same load-bearing construction" in prompt
+        assert "same bronze or brass drive system where functionally appropriate" in prompt
         assert "same selected dominant mechanical feature" in prompt
-        assert "Keep intake, process, and output locations consistent" in prompt
+        assert "Keep the concept-specific workflow and structural layout consistent" in prompt
 
     for prompt in modern.values():
         assert "same product geometry" in prompt
@@ -268,43 +416,38 @@ def test_era_blueprints_share_lineage_but_use_different_engineering(valid_concep
         "primary_function"
     ]
     for required_historical_detail in (
-        "oak",
-        "gear train",
-        "six-spoke",
-        "leather belt",
+        "historically plausible",
+        "timber",
         "bronze",
-        "counterweight",
-        "control levers",
-        "water wheel",
-        "spring barrel",
+        "wrought iron",
+        "no electricity",
     ):
         assert required_historical_detail in leonardo
     for required_modern_detail in (
-        "graphite cabinet",
-        "panoramic safety-glass window",
-        "robotic arms",
-        "sensor",
-        "three pull-out collection bins",
-        "service doors",
-        "12-inch landscape touchscreen",
+        valid_concept["modern_principle"].lower(),
+        valid_concept["materials"][0].lower(),
+        valid_concept["system_components"][0].lower(),
+        "never default to a cabinet",
     ):
         assert required_modern_detail in modern
     assert design_blueprint["leonardo_blueprint"]["overall_silhouette"] != (
         design_blueprint["modern_blueprint"]["overall_silhouette"]
     )
-    assert "robotic arms" not in leonardo
-    assert "oak" not in modern
+    assert "six-spoke" not in leonardo
+    assert "pull-out collection bins" not in modern
 
 
 def test_all_six_prompts_embed_blueprint_before_role_and_lock_identity(valid_concept):
     design_blueprint, leonardo, modern = _build_prompt_sets(valid_concept)
-    lock_wording = """This image must depict exactly the same machine described below.
+    primary_subject = design_blueprint["shared_invention_lineage"][
+        "primary_visual_subject"
+    ]
+    lock_wording = f"""This image must depict exactly the same primary subject described below: {primary_subject}.
 
-Do not redesign the product.
+The primary subject must be immediately recognizable, complete enough to understand, and visually dominant. Preserve its real-world scale and category. Never replace it with a generic processing machine, cabinet, kiosk, or unrelated apparatus.
 
-Do not invent a new geometry.
+Do not redesign the product."""
 
-Only change camera position, activity, environment and human interaction."""
     prompt_sets = (
         (
             leonardo,
@@ -331,7 +474,8 @@ Only change camera position, activity, environment and human interaction."""
             assert lock_wording in prompt
             assert prompt.index(serialized_blueprint) < prompt.index(lock_wording)
             assert prompt.index(lock_wording) < prompt.index("3. Exact image role")
-            assert "must not add, remove, relocate, resize, or restyle" in prompt
+            assert "must not replace or contradict concept-defining components" in prompt
+            assert "vending-machine-like enclosure" in prompt
 
 
 def test_blueprint_is_built_once_and_reused_by_both_prompt_builders(
@@ -341,15 +485,15 @@ def test_blueprint_is_built_once_and_reused_by_both_prompt_builders(
     blueprint = {"single": "blueprint"}
     events = []
     records = [
-        _image_record(index, image_type)
+        _owned_image_record(index, 55, image_type)
         for index, image_type in enumerate(
             application_images.CONCEPT_IMAGE_TYPES,
             start=1,
         )
     ]
 
-    def build_once(concept_data):
-        events.append("build-blueprint")
+    def build_once(concept_data, original_user_prompt):
+        events.append(("build-blueprint", original_user_prompt))
         return blueprint
 
     def build_leonardo(concept_data, received_blueprint):
@@ -379,14 +523,19 @@ def test_blueprint_is_built_once_and_reused_by_both_prompt_builders(
     )
     monkeypatch.setattr(
         application_images,
-        "list_concept_images",
+        "list_automatic_concept_images",
         lambda concept_id: records,
+    )
+    monkeypatch.setattr(
+        application_images,
+        "get_concept_prompt",
+        lambda concept_id: "original source idea",
     )
 
     application_images.generate_and_save_concept_images(valid_concept, concept_id=55)
 
     assert events == [
-        "build-blueprint",
+        ("build-blueprint", "original source idea"),
         ("build-leonardo-prompts", True),
         ("build-modern-prompts", True),
     ]
@@ -464,7 +613,7 @@ def test_existing_image_types_are_skipped(monkeypatch, valid_concept):
         "modern_concept_2",
     }
     records = [
-        _image_record(index, image_type)
+        _owned_image_record(index, 55, image_type)
         for index, image_type in enumerate(existing_types, start=1)
     ]
     generated_prompts = []
@@ -472,7 +621,7 @@ def test_existing_image_types_are_skipped(monkeypatch, valid_concept):
 
     monkeypatch.setattr(
         application_images,
-        "list_concept_images",
+        "list_automatic_concept_images",
         lambda concept_id: list(records),
     )
     monkeypatch.setattr(
@@ -484,7 +633,14 @@ def test_existing_image_types_are_skipped(monkeypatch, valid_concept):
 
     def save_visual(concept_id, image_type, asset):
         saved_types.append(image_type)
-        records.append(_image_record(len(records) + 1, image_type, asset["image_bytes"]))
+        records.append(
+            _owned_image_record(
+                len(records) + 1,
+                concept_id,
+                image_type,
+                asset["image_bytes"],
+            )
+        )
 
     monkeypatch.setattr(application_images, "save_visual", save_visual)
 
@@ -503,7 +659,7 @@ def test_all_existing_images_prevent_duplicate_generation(
     valid_concept,
 ):
     records = [
-        _image_record(index, image_type)
+        _owned_image_record(index, 55, image_type)
         for index, image_type in enumerate(
             application_images.CONCEPT_IMAGE_TYPES,
             start=1,
@@ -511,7 +667,7 @@ def test_all_existing_images_prevent_duplicate_generation(
     ]
     monkeypatch.setattr(
         application_images,
-        "list_concept_images",
+        "list_automatic_concept_images",
         lambda concept_id: records,
     )
 
@@ -607,6 +763,116 @@ def test_partial_failure_keeps_and_persists_successful_images(
     assert results[failed_type]["status"] == "failed"
     assert stored_types == set(application_images.CONCEPT_IMAGE_TYPES) - {failed_type}
     assert len(stored_images) == 5
+
+
+def test_consecutive_concepts_never_share_automatic_image_slots(
+    temporary_database,
+    valid_concept,
+    monkeypatch,
+):
+    concept_a_id = _save_concept(valid_concept, "Concept A")
+    for image_type in application_images.CONCEPT_IMAGE_TYPES:
+        database.save_image_asset(
+            concept_id=concept_a_id,
+            image_type=image_type,
+            prompt=f"A:{image_type}",
+            image_bytes=f"A:{image_type}".encode(),
+        )
+
+    concept_b = {**valid_concept, "title": "Concept B"}
+    concept_b_id = _save_concept(concept_b, "Concept B")
+    assert concept_b_id != concept_a_id
+
+    session_state = {}
+    monkeypatch.setattr(state.st, "session_state", session_state)
+    state.initialize_session_state()
+
+    state.set_current_concept(valid_concept, concept_a_id)
+    concept_a_slots = application_images.get_concept_image_slots(
+        state.get_current_concept_id()
+    )
+    assert set(concept_a_slots) == set(application_images.CONCEPT_IMAGE_TYPES)
+    assert {record[1] for record in concept_a_slots.values()} == {concept_a_id}
+    assert all(record[4].startswith(b"A:") for record in concept_a_slots.values())
+
+    state.set_current_concept(concept_b, concept_b_id)
+    state.start_automatic_image_generation(concept_b_id)
+    assert application_images.get_concept_image_slots(concept_b_id) == {}
+
+    mixed_records = application_images.list_automatic_concept_images(concept_a_id)
+    assert application_images.map_concept_image_slots(
+        concept_b_id,
+        mixed_records,
+    ) == {}
+
+    _stub_automatic_prompts(monkeypatch)
+    monkeypatch.setattr(
+        application_images,
+        "generate_concept_image",
+        lambda prompt: {
+            "prompt": prompt,
+            "image_bytes": f"B:{prompt}".encode(),
+        },
+    )
+
+    results = application_images.generate_and_save_concept_images(
+        concept_b,
+        concept_b_id,
+    )
+    concept_b_slots = application_images.get_concept_image_slots(concept_b_id)
+
+    assert {result["status"] for result in results.values()} == {"saved"}
+    assert set(concept_b_slots) == set(application_images.CONCEPT_IMAGE_TYPES)
+    assert {record[1] for record in concept_b_slots.values()} == {concept_b_id}
+    assert all(record[4].startswith(b"B:") for record in concept_b_slots.values())
+
+    state.set_current_concept(valid_concept, concept_a_id)
+    restored_a_slots = application_images.get_concept_image_slots(
+        state.get_current_concept_id()
+    )
+    assert {record[1] for record in restored_a_slots.values()} == {concept_a_id}
+    assert all(record[4].startswith(b"A:") for record in restored_a_slots.values())
+
+
+def test_failed_new_concept_generation_never_falls_back_to_previous_images(
+    temporary_database,
+    valid_concept,
+    monkeypatch,
+):
+    concept_a_id = _save_concept(valid_concept, "Concept A")
+    for image_type in application_images.CONCEPT_IMAGE_TYPES:
+        database.save_image_asset(
+            concept_id=concept_a_id,
+            image_type=image_type,
+            prompt=f"A:{image_type}",
+            image_bytes=f"A:{image_type}".encode(),
+        )
+
+    concept_b = {**valid_concept, "title": "Concept B"}
+    concept_b_id = _save_concept(concept_b, "Concept B")
+    _stub_automatic_prompts(monkeypatch)
+
+    def fail_generation(prompt):
+        raise RuntimeError(f"failed {prompt}")
+
+    monkeypatch.setattr(
+        application_images,
+        "generate_concept_image",
+        fail_generation,
+    )
+
+    results = application_images.generate_and_save_concept_images(
+        concept_b,
+        concept_b_id,
+    )
+
+    assert set(results) == set(application_images.CONCEPT_IMAGE_TYPES)
+    assert {result["status"] for result in results.values()} == {"failed"}
+    assert application_images.get_concept_image_slots(concept_b_id) == {}
+    assert application_images.map_concept_image_slots(
+        concept_b_id,
+        application_images.list_automatic_concept_images(concept_a_id),
+    ) == {}
 
 
 def test_manual_types_and_legacy_views_remain_isolated():
@@ -719,7 +985,7 @@ def test_slot_renders_saved_and_neutral_empty_states(png_bytes, monkeypatch):
     concept_page._render_concept_image_slot(
         image_type,
         accessible_label,
-        {image_type: _image_record(1, image_type, png_bytes)},
+        {image_type: _owned_image_record(1, 55, image_type, png_bytes)},
         False,
         {},
     )
@@ -767,6 +1033,7 @@ def test_result_sections_render_three_slots_for_each_image_family(
     monkeypatch,
 ):
     rendered_types = []
+    container_keys = []
     monkeypatch.setattr(
         concept_page,
         "_render_concept_image_slot",
@@ -775,7 +1042,9 @@ def test_result_sections_render_three_slots_for_each_image_family(
     monkeypatch.setattr(
         concept_page.st,
         "container",
-        lambda **kwargs: nullcontext(),
+        lambda **kwargs: (
+            container_keys.append(kwargs.get("key")) or nullcontext()
+        ),
     )
     monkeypatch.setattr(
         concept_page.st,
@@ -786,10 +1055,11 @@ def test_result_sections_render_three_slots_for_each_image_family(
     monkeypatch.setattr(concept_page.st, "caption", lambda *args, **kwargs: None)
     monkeypatch.setattr(concept_page, "render_result_box", lambda *args, **kwargs: None)
 
-    concept_page._render_leonardo_vision(valid_concept, {}, False, {})
+    concept_page._render_leonardo_vision(valid_concept, 101, {}, False, {})
     concept_page._render_modern_implementation(
         valid_concept,
         valid_concept["title"],
+        101,
         {},
         False,
         {},
@@ -799,3 +1069,5 @@ def test_result_sections_render_three_slots_for_each_image_family(
         *application_images.LEONARDO_CONCEPT_IMAGE_TYPES,
         *application_images.MODERN_CONCEPT_IMAGE_TYPES,
     )
+    assert "leonardo_image_slots_101" in container_keys
+    assert "modern_image_slots_101" in container_keys

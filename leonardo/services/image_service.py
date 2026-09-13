@@ -2,6 +2,7 @@ import base64
 import binascii
 import json
 import os
+import re
 import struct
 import time
 import zlib
@@ -47,14 +48,98 @@ def _compact_items(values, limit=3):
     return "; ".join(selected) if selected else "Not specified"
 
 
+def _field_text(concept_data, key, limit=480):
+    value = concept_data.get(key)
+    if isinstance(value, dict):
+        value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if isinstance(value, (list, tuple)):
+        return _compact_items(value, limit=5)
+    return _compact_text(value, limit=limit) if value else "Not specified"
+
+
+def _is_bridge_concept(concept_data, original_user_prompt=""):
+    searchable = " ".join(
+        str(value)
+        for value in (
+            concept_data.get("title", ""),
+            concept_data.get("modern_product_name", ""),
+            concept_data.get("leonardo_concept", ""),
+            concept_data.get("executive_summary", ""),
+            concept_data.get("modern_principle", ""),
+            original_user_prompt,
+        )
+    ).casefold()
+    bridge_terms = (
+        r"\bbridge\b",
+        r"\bpuente\b",
+        r"\bponte\b",
+        r"\bpont\b",
+        r"\bbrücke\b",
+        r"\bbro\b",
+        r"\bsilta\b",
+        r"\bmost\b",
+        r"мост",
+        r"桥",
+        r"橋",
+        r"다리",
+    )
+    return any(re.search(term, searchable) for term in bridge_terms)
+
+
+def _primary_visual_subject(concept_data, original_user_prompt=""):
+    if _is_bridge_concept(concept_data, original_user_prompt):
+        return (
+            "a complete modular emergency bridge system spanning or actively "
+            "deploying across a damaged river crossing"
+        )
+    title = _compact_text(concept_data["title"], limit=140)
+    product = _compact_text(concept_data.get("modern_product_name", ""), limit=140)
+    if product and product.casefold() != title.casefold():
+        return f'the complete physical concept "{title}" / product "{product}"'
+    return f'the complete physical concept "{title}"'
+
+
+def _build_visual_brief(concept_data, original_user_prompt=""):
+    primary_subject = _primary_visual_subject(concept_data, original_user_prompt)
+    brief = {
+        "primary_visual_subject": primary_subject,
+        "original_user_prompt": _compact_text(original_user_prompt, limit=1200)
+        if original_user_prompt
+        else "Not available",
+        "title_and_product": _compact_text(
+            f'{concept_data["title"]}; {concept_data.get("modern_product_name", "")}',
+            limit=260,
+        ),
+        "concept_summary": _field_text(concept_data, "executive_summary", limit=700),
+        "core_principle": _field_text(concept_data, "modern_principle", limit=600),
+        "components": _field_text(concept_data, "system_components"),
+        "materials": _field_text(concept_data, "materials"),
+        "use_cases": _field_text(concept_data, "use_cases"),
+        "sketch_and_blueprint_description": _compact_text(
+            f'{concept_data.get("leonardo_sketch_description", "")} '
+            f'{concept_data.get("modern_sketch_description", "")}',
+            limit=1000,
+        ),
+    }
+    if _is_bridge_concept(concept_data, original_user_prompt):
+        brief["mandatory_bridge_anchors"] = (
+            "modular bridge sections; rapid deployment after floods, earthquakes, "
+            "or landslides; lightweight recyclable materials; robotic assembly "
+            "modules; transport by standard trucks; adjustable span for different "
+            "river widths and terrain; solar-powered structural sensors; AI-assisted "
+            "monitoring; civilian rescue and remote-infrastructure use"
+        )
+    return brief
+
+
 def _concept_identity(concept_data):
     identity = {
         "primary_purpose": _compact_text(
             f'{concept_data["title"]}. {concept_data["leonardo_concept"]}'
         ),
         "main_physical_form": _compact_text(
-            f'A purpose-built {concept_data["modern_category"]} physical apparatus or installed system that carries out '
-            f'{concept_data["title"]}. Its geometry and construction must be appropriate to the selected era.'
+            f'The complete physical form of {concept_data["title"]}, at the real-world scale implied by its purpose, '
+            "users, environment, and use cases. Do not force it into a generic machine or cabinet geometry."
         ),
         "core_inputs": _compact_text(
             "Objects, materials, forces, signals, or human actions implied by these use cases: "
@@ -75,189 +160,118 @@ def _concept_identity(concept_data):
     return json.dumps(identity, ensure_ascii=False, sort_keys=True, indent=2)
 
 
-def build_design_blueprint(concept_data):
+def build_design_blueprint(concept_data, original_user_prompt=""):
     identity = json.loads(_concept_identity(concept_data))
     machine_name = _compact_text(concept_data["title"], limit=120)
     operating_environment = identity["intended_operating_environment"]
     primary_function = identity["primary_purpose"]
+    visual_brief = _build_visual_brief(concept_data, original_user_prompt)
+    primary_subject = visual_brief["primary_visual_subject"]
+    components = _field_text(concept_data, "system_components")
+    materials = _field_text(concept_data, "materials")
+    requirements = _field_text(concept_data, "technical_requirements")
+    principle = _field_text(concept_data, "modern_principle", limit=600)
+    sketch = _field_text(concept_data, "leonardo_sketch_description", limit=700)
+    modern_sketch = _field_text(concept_data, "modern_sketch_description", limit=700)
     shared_lineage = {
+        "visual_brief": visual_brief,
+        "primary_visual_subject": primary_subject,
         "purpose": primary_function,
-        "workflow": (
-            "Input enters through a dedicated upper-left intake, passes through a "
-            "central sensing and processing zone, and leaves through a separate "
-            "lower-right output without reversing direction."
-        ),
-        "functional_architecture": (
-            "Three fixed functional zones: intake and preparation on the left, "
-            "controlled processing in the center, and collection or delivery on "
-            "the lower right."
-        ),
-        "recognizable_identity": (
-            "A single human-scale machine with a taller left intake tower, one "
-            "visually dominant central processing chamber, and a clearly separated "
-            "lower-right output bank."
-        ),
+        "workflow": principle,
+        "functional_architecture": components,
+        "recognizable_identity": primary_subject,
         "primary_users": identity["primary_users"],
         "core_inputs": identity["core_inputs"],
         "core_outputs": identity["core_outputs"],
     }
     leonardo_blueprint = {
-        "machine_name": f"{machine_name} — Leonardo Mechanical Apparatus",
+        "machine_name": f"{machine_name} — Leonardo-era engineering interpretation",
         "primary_function": primary_function,
         "overall_silhouette": (
-            "An open, asymmetric three-bay oak apparatus: a tall narrow intake "
-            "tower on the left, a broad exposed mechanism bay in the center, and "
-            "a low receiving bench on the right."
+            f"The complete primary subject remains unmistakably {primary_subject}. "
+            f"Use this concept-specific sketch as the form reference: {sketch}"
         ),
         "approximate_proportions": (
-            "Approximately 2.6 metres long, 1.4 metres deep, and 2.2 metres high; "
-            "the left tower occupies one quarter of the length, the central bay "
-            "one half, and the right output bench one quarter."
+            "Use the real-world scale, span, and proportions implied by the use cases "
+            f"and requirements; never force the concept into a human-scale cabinet. {requirements}"
         ),
-        "dominant_structural_features": [
-            "Four pegged oak corner posts joined by two horizontal walnut rails",
-            "A left gravity-fed hopper with a steep V-shaped throat",
-            "A central cylindrical processing drum held between two timber A-frames",
-            "A lower-right three-compartment receiving chest",
-        ],
+        "dominant_structural_features": list(concept_data.get("system_components", []))[:5]
+        or [primary_subject],
         "distinctive_visual_signature": (
-            "One large six-spoke bronze-rimmed flywheel mounted outside the right "
-            "face of the central bay, aligned with the processing drum axle."
+            f"A recognizable Leonardo-era ancestor of {primary_subject}, preserving "
+            "the concept's modular structure and purpose rather than a generic machine."
         ),
         "frame_construction": (
-            "Dark pegged-oak post-and-beam frame with diagonal walnut braces, "
-            "hand-cut mortise-and-tenon joints, visible wooden pins, and no closed casing."
+            f"Historically plausible load-bearing construction derived from the actual "
+            f"concept components ({components}), using joinery and mechanisms available around 1505."
         ),
         "primary_materials": (
-            "Oiled oak and walnut structure; bronze gears, bearings, cams, and "
-            "flywheel rim; wrought-iron shafts; leather belts; hemp rope; linen "
-            "screens; stone counterweights."
+            f"Historically plausible equivalents of the requested material functions ({materials}): "
+            "timber, wrought iron, bronze, rope, leather, canvas, and stone only where structurally appropriate."
         ),
         "primary_mechanism": (
-            "A fixed three-stage gear train: a small bronze drive pinion at lower "
-            "left engages a central 24-tooth wheel, which engages a smaller upper "
-            "gear on the drum shaft. A crossed leather belt runs from the large "
-            "right-side flywheel to a rear camshaft; a straight lower belt returns "
-            "from that camshaft to the intake gate."
+            f"A mechanically credible 1505 analogue of this concept-specific operating "
+            f"principle: {principle}. Preserve function; replace only anachronistic technology."
         ),
-        "input_location": (
-            "One V-shaped wooden hopper at shoulder height on the upper-left face, "
-            "feeding downward through a single bronze shutter into the central drum."
-        ),
-        "output_location": (
-            "Three open-topped removable wooden receiving trays arranged left to "
-            "right beneath the low bench at the lower-right face."
-        ),
+        "input_location": "The starting point of the actual workflow described by the concept and use cases.",
+        "output_location": "The useful real-world outcome of the actual workflow described by the concept and use cases.",
         "power_source": (
-            "Primary drive from a narrow undershot water wheel coupled at the rear-left; "
-            "a hand-wound spring barrel and two stone gravity counterweights inside "
-            "the left tower maintain motion when water power pauses."
+            "Only context-appropriate human, animal, gravity, water, wind, spring, "
+            "counterweight, or pulley power; use no electricity."
         ),
-        "visible_moving_components": [
-            "The same external six-spoke flywheel on the central bay's right face",
-            "Three intermeshing bronze gears in a vertical diagonal train",
-            "One crossed upper leather belt and one straight lower return belt",
-            "Twin stone counterweights travelling in parallel guides",
-            "The central slatted drum and its rear camshaft",
-        ],
+        "visible_moving_components": list(concept_data.get("system_components", []))[:5]
+        or ["Concept-specific mechanical linkages"],
         "operator_position": (
-            "The operator stands at the front-left beside two waist-height wooden "
-            "control levers and one floor treadle, clear of the flywheel and output trays."
+            f"Operators from the intended user groups work at physically credible access "
+            f"points without obscuring the primary subject: {identity['primary_users']}"
         ),
         "typical_environment": (
             f"A dry, working High Renaissance installation suited to: {operating_environment}"
         ),
-        "characteristic_color_palette": (
-            "Dark honey oak, near-black walnut, aged bronze, muted brass, wrought-iron "
-            "charcoal, natural leather brown, and unbleached linen."
-        ),
-        "key_recognizable_details": [
-            "Tall left hopper with one bronze shutter",
-            "Exactly one large six-spoke flywheel on the central-right exterior",
-            "Three exposed bronze gears in the same diagonal arrangement",
-            "Twin counterweights visible inside the left tower",
-            "Two front-left levers and one treadle",
-            "Exactly three lower-right wooden output trays",
-        ],
+        "characteristic_color_palette": "Dark timber, aged bronze, wrought iron, rope, leather, stone, and natural canvas.",
+        "key_recognizable_details": list(concept_data.get("technical_requirements", []))[:5]
+        or [primary_subject],
     }
     modern_blueprint = {
-        "machine_name": f"{machine_name} — Modern Integrated System",
+        "machine_name": f"{machine_name} — Modern implementation",
         "primary_function": primary_function,
         "overall_silhouette": (
-            "A sealed, softly rectangular graphite cabinet with a slightly taller "
-            "left intake tower, a wide central panoramic process window, and a low "
-            "right-hand output bank integrated into one continuous enclosure."
+            f"The complete primary subject is unmistakably {primary_subject}. "
+            f"Follow the actual modern sketch description: {modern_sketch}"
         ),
         "approximate_proportions": (
-            "Approximately 2.2 metres wide, 1.05 metres deep, and 2.0 metres high; "
-            "the left intake module occupies 25 percent of the facade, the central "
-            "windowed process module 50 percent, and the right service/output module "
-            "25 percent."
+            f"Real-world scale and proportions appropriate to the stated environment, "
+            f"use cases, deployment, and requirements; never default to a cabinet. {requirements}"
         ),
-        "dominant_structural_features": [
-            "A flush graphite aluminium outer cabinet on a recessed black plinth",
-            "A left waist-to-shoulder-height intake drawer beneath a slim sensor hood",
-            "A single panoramic safety-glass window across the central half",
-            "Three pull-out collection bins across the lower-right facade",
-        ],
+        "dominant_structural_features": list(concept_data.get("system_components", []))[:5]
+        or [primary_subject],
         "distinctive_visual_signature": (
-            "One uninterrupted smoke-tinted central window framing two compact "
-            "mirrored robotic arms around a matte-black rotating process drum."
+            f"The product is recognized first as {primary_subject}; component placement "
+            "must express the source idea, not a reusable factory-machine template."
         ),
         "frame_construction": (
-            "Welded structural-steel chassis beneath modular powder-coated aluminium "
-            "panels, with a recessed plinth, rounded 35-millimetre cabinet corners, "
-            "flush fasteners, and sealed removable service panels."
+            f"A buildable, maintainable contemporary structure derived from these "
+            f"concept-specific components and requirements: {components}; {requirements}"
         ),
-        "primary_materials": (
-            "Graphite powder-coated aluminium panels, black structural steel, "
-            "smoke-tinted safety glass, dark durable polymer trims, stainless-steel "
-            "contact surfaces, and restrained cool-blue status lighting."
-        ),
-        "primary_mechanism": (
-            "Two mirrored compact six-axis robotic arms manipulate the input around "
-            "one central horizontal rotating drum while an overhead sensor bar and "
-            "two fixed side cameras inspect the process; guarded conveyors route the "
-            "result to three lower-right bins."
-        ),
-        "input_location": (
-            "One wide pull-out intake drawer on the left facade at waist height, "
-            "directly below a full-width matte-black sensor hood."
-        ),
-        "output_location": (
-            "Exactly three equal pull-out bins in one horizontal row across the "
-            "lower-right facade, each with the same recessed dark handle."
-        ),
+        "primary_materials": materials,
+        "primary_mechanism": principle,
+        "input_location": "The real starting point of the concept-specific deployment or operating workflow.",
+        "output_location": "The intended real-world result and service delivered by the concept.",
         "power_source": (
-            "Mains electric power through the rear plinth, driving enclosed servo "
-            "motors, the drum motor, conveyors, sensors, and control electronics."
+            "Use only power sources explicitly stated or credibly implied by the source idea and components."
         ),
-        "visible_moving_components": [
-            "Two mirrored robotic arms mounted to the inner left and right walls",
-            "One matte-black horizontal rotating drum at the window centre",
-            "One guarded lower conveyor running toward the three output bins",
-            "The left intake drawer and three lower-right bin drawers",
-        ],
+        "visible_moving_components": list(concept_data.get("system_components", []))[:5]
+        or ["Concept-specific moving or deployable components"],
         "operator_position": (
-            "The operator stands at the front-right beside one 12-inch landscape "
-            "touchscreen mounted above the output bank; maintenance access is from "
-            "the split rear doors and one narrow flush door on the right side."
+            f"Real users interact only at plausible deployment, control, maintenance, "
+            f"loading, or access points: {identity['primary_users']}"
         ),
         "typical_environment": (
             f"A clean present-day installation appropriate to: {operating_environment}"
         ),
-        "characteristic_color_palette": (
-            "Matte graphite body, deep navy recessed panels, smoke-black window, "
-            "brushed stainless contact surfaces, and minimal cool-blue status accents."
-        ),
-        "key_recognizable_details": [
-            "Slightly taller left module with one intake drawer and overhead sensor bar",
-            "Single wide smoke-tinted central window",
-            "Exactly two mirrored internal robotic arms around one black drum",
-            "One 12-inch landscape screen above the lower-right output bank",
-            "Exactly three equal lower-right collection bins",
-            "Split rear service doors plus one narrow right-side service door",
-        ],
+        "characteristic_color_palette": "Material-authentic contemporary engineering finishes with restrained safety markings.",
+        "key_recognizable_details": list(concept_data.get("technical_requirements", []))[:5]
+        or [primary_subject],
     }
     return {
         "shared_invention_lineage": shared_lineage,
@@ -274,20 +288,37 @@ def _serialize_era_blueprint(design_blueprint, blueprint_key):
             "Design blueprint is missing required fields: " + ", ".join(missing_fields)
         )
 
-    return json.dumps(
-        {
-            "shared_invention_lineage": design_blueprint["shared_invention_lineage"],
-            "machine_blueprint": blueprint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-        indent=2,
+    lineage = design_blueprint["shared_invention_lineage"]
+    visual_brief = lineage["visual_brief"]
+    era_brief = {
+        "name": blueprint["machine_name"],
+        "overall_form_and_scale": (
+            f'{blueprint["overall_silhouette"]} {blueprint["approximate_proportions"]}'
+        ),
+        "structural_features": blueprint["dominant_structural_features"],
+        "construction_and_materials": (
+            f'{blueprint["frame_construction"]} {blueprint["primary_materials"]}'
+        ),
+        "operating_principle": blueprint["primary_mechanism"],
+        "environment_and_users": (
+            f'{blueprint["typical_environment"]} {blueprint["operator_position"]}'
+        ),
+        "recognizable_details": blueprint["key_recognizable_details"],
+    }
+    return (
+        f'PRIMARY VISUAL SUBJECT: {lineage["primary_visual_subject"]}\n\n'
+        "CONCEPT-SPECIFIC VISUAL BRIEF:\n"
+        + json.dumps(visual_brief, ensure_ascii=False, indent=2)
+        + "\n\nERA IMPLEMENTATION BRIEF:\n"
+        + json.dumps(era_brief, ensure_ascii=False, indent=2)
     )
 
 
-def _assemble_concept_image_prompt(blueprint, role, sections):
-    identity_lock = """
-This image must depict exactly the same machine described below.
+def _assemble_concept_image_prompt(blueprint, primary_subject, role, sections):
+    identity_lock = f"""
+This image must depict exactly the same primary subject described below: {primary_subject}.
+
+The primary subject must be immediately recognizable, complete enough to understand, and visually dominant. Preserve its real-world scale and category. Never replace it with a generic processing machine, cabinet, kiosk, or unrelated apparatus.
 
 Do not redesign the product.
 
@@ -295,11 +326,13 @@ Do not invent a new geometry.
 
 Only change camera position, activity, environment and human interaction.
 
-The Design Blueprint has higher priority than every role-specific instruction. The role may change only viewpoint, process state, surrounding scene, and human activity. It must not add, remove, relocate, resize, or restyle any machine component defined by the blueprint.
+The Design Blueprint has higher priority than every role-specific instruction. The role may change only viewpoint, process state, surrounding scene, and human activity. It must not replace or contradict concept-defining components in the blueprint.
+
+Do not depict a standalone factory machine, printer, crusher, vending-machine-like enclosure, or unrelated industrial cabinet as the primary subject.
 """
     ordered_sections = (
         ("1. Design Blueprint — highest priority", blueprint),
-        ("2. Machine identity lock", identity_lock),
+        ("2. Primary subject identity lock", identity_lock),
         ("3. Exact image role", role),
         *sections,
     )
@@ -310,6 +343,9 @@ The Design Blueprint has higher priority than every role-specific instruction. T
 
 def build_leonardo_concept_image_prompts(concept_data, design_blueprint):
     blueprint = _serialize_era_blueprint(design_blueprint, "leonardo_blueprint")
+    primary_subject = design_blueprint["shared_invention_lineage"][
+        "primary_visual_subject"
+    ]
     era_interpretation = """
 Priority instruction: create a genuine historical reconstruction of how Leonardo da Vinci or a skilled High Renaissance engineer might have attempted this purpose around the year 1505. Redesign the invention from first principles using only knowledge, energy sources, tools, manufacturing methods, and mechanisms historically plausible in 1505. This must be a pre-industrial mechanical interpretation, not a modern product placed in a Renaissance room.
 
@@ -320,20 +356,20 @@ Render a photorealistic cinematic physical scene. Do not render a sketch, bluepr
     historical_materials = """
 Use only function-appropriate materials and mechanisms plausible around 1505: oak, walnut, carved timber, bronze, brass, copper, wrought iron, hand-forged steel tools, leather belts, rope drives, wooden or bronze gears, pulleys, cams, cranks, flywheels, counterweights, springs, water power, human power, animal power, wind power, gravity-fed mechanisms, glass lenses, parchment, hand-painted markings, rivets, pins, pegs, and mechanical linkages.
 
-The machine must visibly rely on a carved timber structural frame, exposed bronze or brass motion-transfer components, and one distinctive dominant mechanical feature appropriate to the concept—such as a wheel, drum, gear train, pulley cluster, counterweight assembly, or lens mechanism.
+The invention must visibly rely on a function-appropriate carved timber load-bearing structure, exposed bronze or brass motion-transfer components where useful, and one distinctive dominant mechanical feature appropriate to the concept—such as a wheel, gear train, pulley cluster, counterweight assembly, or lens mechanism.
 """
     historical_prohibitions = """
 Strictly prohibit visibly modern technology and settings: electricity, electric motors, batteries, wires, LEDs, illuminated digital screens, LCD or OLED displays, touchscreens, digital interfaces, computer-vision cameras, modern optical sensors, microchips, circuit boards, artificial-intelligence interfaces, contemporary robotic arms, modern industrial robot joints, plastics, aluminium extrusions, carbon fibre, injection-moulded parts, stainless-steel appliance housings, contemporary industrial housings, modern bins with printed recycling icons, modern factories, contemporary branding, modern apartments, modern clothing, and modern typography.
 
-Also prohibit logos, product names printed on the machine, interface paragraphs, signs, labels, watermarks, recycling symbols, random letters, and pseudo-text. Never depict modern machinery merely decorated with wood, brass, warm lighting, or Renaissance ornament.
+Also prohibit logos, product names printed on the invention, interface paragraphs, signs, labels, watermarks, recycling symbols, random letters, and pseudo-text. Never depict a modern product merely decorated with wood, brass, warm lighting, or Renaissance ornament.
 """
     historical_continuity = """
-Within the Leonardo set, preserve the same broad proportions and recognizable historical machine identity in all three images. Repeat the same carved timber frame, the same bronze or brass drive system, and the same selected dominant mechanical feature. Keep intake, process, and output locations consistent. Change camera position and human activity, not the invention's identity.
+Within the Leonardo set, preserve the same broad proportions and recognizable historical invention identity in all three images. Repeat the same load-bearing construction, the same bronze or brass drive system where functionally appropriate, and the same selected dominant mechanical feature. Keep the concept-specific workflow and structural layout consistent. Change camera position and human activity, not the invention's identity.
 
-Across eras, preserve the purpose and functional input-process-output lineage from the shared identity, but do not copy a modern casing, robotic arm, sensor array, interface, or manufacturing design. The Renaissance machine must be an era-appropriate mechanical ancestor, not the same object with different styling.
+Across eras, preserve the purpose and functional lineage from the shared identity, but do not copy a modern casing, robotic arm, sensor array, interface, or manufacturing design. The Renaissance invention must be an era-appropriate mechanical ancestor, not the same object with different styling.
 """
     square_readability = """
-Square image composed for a compact slot: one clearly readable primary machine, strong silhouette, important mechanism away from the edges, no split screen, no collage, no multiple panels, no excessive empty space, and no malformed text. Keep the machine visually dominant even when people are present.
+Square image composed for a compact slot: one clearly readable primary invention, strong silhouette, important structure and mechanism away from the edges, no split screen, no collage, no multiple panels, no excessive empty space, and no malformed text. Keep the invention visually dominant even when people are present.
 """
 
     roles = (
@@ -356,10 +392,32 @@ Square image composed for a compact slot: one clearly readable primary machine, 
             "Keep the complete machine visible and recognizable while human actions explain its scale and use case. Show a logical sequence of input, operator action, and useful result. Human activity supports the machine's purpose but must not obscure its distinctive frame, drive system, or dominant mechanical feature.",
         ),
     )
+    if "bridge" in primary_subject.casefold():
+        roles = (
+            (
+                "leonardo_concept_1",
+                "Historical overview of the complete modular emergency bridge. Show the bridge spanning a damaged river crossing as the dominant subject, with its full deck, modular sections, supports, adjustable span, and both riverbanks readable.",
+                "Elevated three-quarter wide overview after a flood or landslide. The complete Leonardo-era bridge occupies approximately 65–80% of the frame and visibly connects the broken route across the river. Show repeated timber-and-wrought-iron modular spans and compact transportable sections staged near one bank. No close-up, no isolated mechanism, and no workshop-bound machine.",
+                "Reveal the full load path, modular deck and truss sections, bank anchoring, adjustable-span joints, ropes, pulleys, winches, counterweights, and rapid-deployment logic. Solar sensors, AI monitoring, and robotic assembly from the source concept must appear only as historically plausible mechanical observation and assisted-assembly analogues, never as modern electronics.",
+            ),
+            (
+                "leonardo_concept_2",
+                "Engineering detail of the same modular emergency bridge. Explain how bridge sections connect and how the span is deployed without losing the identity of a bridge across a damaged river crossing.",
+                "Closer oblique technical view from riverbank level, different from Image 1. Keep enough of the deck and opposite bank visible to prove this is a bridge, while foregrounding one modular joint, lifting frame, adjustable support, and rope-and-winch assembly. Do not crop into an ambiguous standalone machine.",
+                "Show a clear cause-and-effect deployment mechanism: interchangeable bridge modules being aligned and locked, timber or metal pins and braces taking load, pulleys and counterweights extending the span, and repairable recyclable-era materials. The mechanism belongs to the bridge structure; it is not a factory device.",
+            ),
+            (
+                "leonardo_concept_3",
+                "Historical deployment scene of the same modular emergency bridge during civilian rescue. Show rapid field assembly and immediate practical use after a disaster.",
+                "Wider river-crossing scene with a clearly different camera position and one to three historically dressed engineers, builders, or rescuers deploying modular bridge sections from carts at a flood-damaged route. Keep the large bridge and the crossing dominant; people provide scale and workflow rather than becoming the subject.",
+                "Show transportable modules arriving by period carts, mechanical assisted assembly, adjustable span fitting the river width and terrain, rescuers securing the structure, and civilians or essential supplies beginning to cross. Preserve the modern concept's disaster-response and remote-infrastructure purpose through historically plausible means.",
+            ),
+        )
 
     return {
         image_type: _assemble_concept_image_prompt(
             blueprint,
+            primary_subject,
             role,
             (
                 ("4. Required scene and camera composition", composition),
@@ -377,10 +435,13 @@ Square image composed for a compact slot: one clearly readable primary machine, 
 
 def build_modern_concept_image_prompts(concept_data, design_blueprint):
     blueprint = _serialize_era_blueprint(design_blueprint, "modern_blueprint")
+    primary_subject = design_blueprint["shared_invention_lineage"][
+        "primary_visual_subject"
+    ]
     era_interpretation = """
-Priority instruction: create a realistic present-day engineering implementation of the shared purpose. Translate the function into a commercially plausible product, installed machine, service system, or piece of infrastructure using contemporary manufacturing and safety practices. The result must look buildable, maintainable, usable, and appropriate for the stated users and operating environment.
+Priority instruction: create a realistic present-day engineering implementation of the shared purpose. Translate the function into a commercially plausible product, service system, vehicle, structure, or piece of infrastructure using contemporary manufacturing and safety practices. The result must look buildable, maintainable, usable, and appropriate for the stated users and operating environment.
 
-Use modern technology only when it serves the concept: industrial design, electric actuators, computer vision, modern sensors, robotics, contemporary safety systems, and practical controls. This is the evolutionary descendant of the Renaissance mechanism, not the same wooden machine in cooler lighting and not an unexplained science-fiction device.
+Use modern technology only when it serves the concept: industrial design, electric actuators, computer vision, modern sensors, robotics, contemporary safety systems, and practical controls. This is the evolutionary descendant of the Renaissance interpretation, not the same historical object in cooler lighting and not an unexplained science-fiction device.
 
 Render a photorealistic present-day scene, not a CAD drawing, blueprint, diagram, technical board, or concept-art illustration.
 """
@@ -397,7 +458,7 @@ Also prohibit logos, product names printed on the device, interface paragraphs, 
     modern_continuity = """
 Within the Modern set, preserve the same product geometry, proportions, material palette, intake and output locations, controls, sensors, safety guards, modules, and other distinctive features across all three images. Change viewpoint, process state, and user activity, not the product identity.
 
-Across eras, preserve the shared purpose, scale, and functional input-process-output lineage, but do not retain identical casing, robotic arms, interfaces, joints, manufacturing design, or materials from the Leonardo machine. The modern result should feel like a practical technological descendant rather than the same object in another room.
+Across eras, preserve the shared purpose, scale, and functional lineage, but do not retain identical casing, robotic arms, interfaces, joints, manufacturing design, or materials from the Leonardo-era invention. The modern result should feel like a practical technological descendant rather than the same object in another room.
 """
     square_readability = """
 Square image composed for a compact slot: one clearly readable primary system, strong silhouette, important functional areas away from the edges, no split screen, no collage, no multiple panels, no excessive empty space, and no malformed text. Keep the product or system visually dominant even when users are present.
@@ -423,10 +484,32 @@ Square image composed for a compact slot: one clearly readable primary system, s
             "Keep the system clearly visible and recognizable while interaction demonstrates a logical workflow. Show controls, access points, loading or unloading areas, safety behavior, and the useful outcome where relevant. Human activity must make practical operational sense and must not hide the product's distinctive geometry or modules.",
         ),
     )
+    if "bridge" in primary_subject.casefold():
+        roles = (
+            (
+                "modern_concept_1",
+                "Deployed-system overview. Show the complete present-day modular emergency bridge already spanning a flood-damaged river crossing as the dominant primary subject.",
+                "Clean elevated three-quarter wide view showing both riverbanks, the interrupted road, and the full adjustable bridge span. The bridge occupies approximately 65–80% of the frame. Its repeated lightweight modular deck and truss sections, approach ramps, supports, and integrated solar sensor nodes are plainly visible. No isolated product cabinet and no close-up.",
+                "Show a credible truck-transportable bridge system in service: recyclable alloy and composite modules, adjustable span matched to the river width and terrain, structural monitoring sensors powered by compact solar panels, safe barriers, load-bearing joints, and a restored route after flood, earthquake, or landslide damage.",
+            ),
+            (
+                "modern_concept_2",
+                "Truck transport and robotic assembly. Show the same modular emergency bridge actively extending across the damaged river crossing during rapid deployment.",
+                "Operational riverbank view, lower and closer than Image 1, with standard trucks delivering bridge modules and robotic assembly units lifting, aligning, and locking a span section into the bridge. Keep the growing bridge, river gap, and opposite-bank destination visible so the equipment cannot be mistaken for a standalone factory machine.",
+                "Make the deployment sequence visually explicit: modules unload from standard trucks, robotic assembly mechanisms position recyclable lightweight sections, adjustable connectors lock the span, and solar-powered sensors begin structural checks through an AI-assisted monitoring system. Show credible outriggers, rigging, safety zones, and terrain adaptation.",
+            ),
+            (
+                "modern_concept_3",
+                "Civilian rescue and remote-infrastructure use. Show the same completed modular emergency bridge restoring access through a disaster area.",
+                "Wider human-context scene from a third viewpoint: emergency crews supervise the monitored crossing while rescue vehicles, civilians, or infrastructure supplies use the bridge over a damaged river route. The complete bridge remains large, unobscured, and visually dominant; users demonstrate scale and value.",
+                "Show a believable operational outcome: rapid emergency access, safe traffic flow, adjustable modular structure, solar sensor nodes, AI-assisted structural monitoring at a restrained field control point, and standard trucks or robotic modules parked after assembly. The scene must communicate civilian rescue and remote-infrastructure readiness.",
+            ),
+        )
 
     return {
         image_type: _assemble_concept_image_prompt(
             blueprint,
+            primary_subject,
             role,
             (
                 ("4. Required scene and camera composition", composition),

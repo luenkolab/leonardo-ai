@@ -2,7 +2,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from database import (
     delete_image_asset,
+    get_concept_prompt,
     get_images_for_concept,
+    get_images_for_concept_by_types,
     save_image_asset,
     toggle_image_favorite,
 )
@@ -51,6 +53,10 @@ def list_concept_images(concept_id):
     return get_images_for_concept(concept_id)
 
 
+def list_automatic_concept_images(concept_id):
+    return get_images_for_concept_by_types(concept_id, CONCEPT_IMAGE_TYPES)
+
+
 def remove_visual(image_id) -> None:
     delete_image_asset(image_id)
 
@@ -78,6 +84,25 @@ def map_automatic_concept_images(images):
         if image_type in CONCEPT_IMAGE_TYPES and image_type not in mapped_images:
             mapped_images[image_type] = image
     return mapped_images
+
+
+def map_concept_image_slots(concept_id, images):
+    """Map only records that explicitly belong to the displayed concept."""
+    mapped_images = {}
+    for image in images:
+        record_concept_id = image[1]
+        image_type = image[2]
+        if record_concept_id != concept_id or image_type not in CONCEPT_IMAGE_TYPES:
+            continue
+        mapped_images.setdefault(image_type, image)
+    return mapped_images
+
+
+def get_concept_image_slots(concept_id):
+    return map_concept_image_slots(
+        concept_id,
+        list_automatic_concept_images(concept_id),
+    )
 
 
 def group_automatic_concept_images(images):
@@ -128,8 +153,9 @@ def build_concept_gallery_items(concepts, images, favorites_only=False):
 
 
 def generate_and_save_concept_images(concept_data, concept_id):
-    existing_images = map_automatic_concept_images(list_concept_images(concept_id))
-    design_blueprint = build_design_blueprint(concept_data)
+    existing_images = get_concept_image_slots(concept_id)
+    original_user_prompt = get_concept_prompt(concept_id) or ""
+    design_blueprint = build_design_blueprint(concept_data, original_user_prompt)
     prompts = {
         **build_leonardo_concept_image_prompts(concept_data, design_blueprint),
         **build_modern_concept_image_prompts(concept_data, design_blueprint),
@@ -153,9 +179,7 @@ def generate_and_save_concept_images(concept_data, concept_id):
             image_type = futures[future]
             try:
                 asset = future.result()
-                current_images = map_automatic_concept_images(
-                    list_concept_images(concept_id)
-                )
+                current_images = get_concept_image_slots(concept_id)
                 if image_type in current_images:
                     results[image_type] = {"status": "skipped"}
                     continue

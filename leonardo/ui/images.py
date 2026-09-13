@@ -8,8 +8,11 @@ from application.images import (
     save_visual,
     toggle_visual_favorite,
 )
-from ui.components import render_result_box
+from ui.components import render_generated_section_heading, render_result_box
 from ui.state import BLUEPRINT_ASSET, LEONARDO_ASSET, get_current_concept_id, get_current_language
+
+
+_SAVED_IMAGES_ICON = """<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="16" height="14" rx="2"/><path d="M5 16l4-4 3 3 3-3 6 6"/><circle cx="16.5" cy="9.5" r="1.5"/><path d="M3 17V5a2 2 0 0 1 2-2h14"/></svg>"""
 
 
 def render_generated_visuals():
@@ -80,12 +83,16 @@ def render_generated_visuals():
 
 def render_saved_images():
     language = get_current_language()
-    st.markdown(f"## {translate('images.saved_images', language)}")
+    render_generated_section_heading(
+        translate("images.saved_images", language),
+        _SAVED_IMAGES_ICON,
+    )
 
     current_concept_id = get_current_concept_id()
 
     if not current_concept_id:
-        st.info(translate("images.no_concept", language))
+        with st.container(key="saved_images_empty_state"):
+            st.info(translate("images.no_concept", language))
         return
 
     images = exclude_automatic_concept_images(
@@ -93,7 +100,8 @@ def render_saved_images():
     )
 
     if not images:
-        st.info(translate("images.none_saved", language))
+        with st.container(key="saved_images_empty_state"):
+            st.info(translate("images.none_saved", language))
         return
 
     cols = st.columns(2)

@@ -124,7 +124,8 @@ else:
 images = exclude_automatic_concept_images(images, image_type_index=2)
 
 if not concept_gallery_items and not images:
-    st.info(translate("gallery.no_images", language))
+    with st.container(key="gallery_empty_state"):
+        st.info(translate("gallery.no_images", language))
 else:
     if concept_gallery_items:
         st.subheader(translate("gallery.generated_concepts", language))

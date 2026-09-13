@@ -3,7 +3,8 @@ import json
 import streamlit as st
 import streamlit.components.v1 as components
 
-from i18n import LANGUAGES, language_display_name, translate
+from i18n import LANGUAGES, translate
+from ui.components import render_generated_section_heading
 from ui.state import get_current_language
 
 
@@ -13,6 +14,8 @@ _SPEECH_LOCALES = {
     "fi": "fi-FI", "pl": "pl-PL", "zh": "zh-CN", "ja": "ja-JP",
     "ko": "ko-KR",
 }
+
+_VOICE_ASSISTANT_ICON = """<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/><path d="M3 8v6M21 8v6"/></svg>"""
 
 
 def _to_safe_js_string(value: object) -> str:
@@ -87,7 +90,10 @@ window.speechSynthesis.speak(utterance);
 
 def render_voice_assistant(concept_data):
     language = get_current_language()
-    st.markdown(f"## 🧠 {translate('voice.assistant', language)}")
+    render_generated_section_heading(
+        translate("voice.assistant", language),
+        _VOICE_ASSISTANT_ICON,
+    )
 
     title = concept_data.get("title", "")
     executive_summary = concept_data.get("executive_summary", "")
@@ -107,7 +113,8 @@ def render_voice_assistant(concept_data):
         translate("voice.language", language),
         list(LANGUAGES),
         key=voice_language_key,
-        format_func=language_display_name,
+        format_func=lambda value: LANGUAGES[value]["name"],
+        label_visibility="collapsed",
     )
 
     summary_text = translate("voice.summary_text", voice_language, title=title, summary=executive_summary, market=market_demand, investor=investor_summary)
@@ -117,19 +124,19 @@ def render_voice_assistant(concept_data):
 
     top1, top2, top3 = st.columns(3)
     with top1:
-        play_summary = st.button(f"▶ {translate('voice.summary', language)}", key="voice_summary", use_container_width=True)
+        play_summary = st.button(translate("voice.summary", language), key="voice_summary", use_container_width=True)
     with top2:
-        play_investor = st.button(f"🎧 {translate('voice.investor', language)}", key="voice_investor", use_container_width=True)
+        play_investor = st.button(translate("voice.investor", language), key="voice_investor", use_container_width=True)
     with top3:
-        play_engineering = st.button(f"⚙ {translate('voice.engineering', language)}", key="voice_engineering", use_container_width=True)
+        play_engineering = st.button(translate("voice.engineering", language), key="voice_engineering", use_container_width=True)
 
     bottom1, bottom2, bottom3 = st.columns(3)
     with bottom1:
-        pause_voice = st.button(f"⏸ {translate('voice.pause', language)}", key="voice_pause", use_container_width=True)
+        pause_voice = st.button(translate("voice.pause", language), key="voice_pause", use_container_width=True)
     with bottom2:
-        resume_voice = st.button(f"▶ {translate('voice.resume', language)}", key="voice_resume", use_container_width=True)
+        resume_voice = st.button(translate("voice.resume", language), key="voice_resume", use_container_width=True)
     with bottom3:
-        stop_voice = st.button(f"⏹ {translate('voice.stop', language)}", key="voice_stop", use_container_width=True)
+        stop_voice = st.button(translate("voice.stop", language), key="voice_stop", use_container_width=True)
 
 
     if play_summary:
