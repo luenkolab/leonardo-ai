@@ -5,11 +5,18 @@ from i18n import TRANSLATIONS
 from ui import sidebar
 
 
-def test_custom_gallery_button_switches_to_grouped_gallery_page(monkeypatch):
-    switched_pages = []
+def test_custom_gallery_button_updates_shared_page_state(monkeypatch):
     internal_page_updates = []
 
     monkeypatch.setattr(sidebar.st, "sidebar", nullcontext())
+    monkeypatch.setattr(
+        sidebar.st,
+        "session_state",
+        {
+            sidebar.GENERATE_IMAGES: False,
+            sidebar.USER_PROMPT: "",
+        },
+    )
     monkeypatch.setattr(sidebar.st, "markdown", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         sidebar.st,
@@ -22,16 +29,16 @@ def test_custom_gallery_button_switches_to_grouped_gallery_page(monkeypatch):
         lambda label, options, **kwargs: options[0],
     )
     monkeypatch.setattr(sidebar.st, "text_area", lambda *args, **kwargs: "")
+    monkeypatch.setattr(sidebar.st, "toggle", lambda *args, **kwargs: False)
     monkeypatch.setattr(sidebar.st, "expander", lambda *args, **kwargs: nullcontext())
-    monkeypatch.setattr(sidebar.st, "switch_page", switched_pages.append)
+    monkeypatch.setattr(sidebar.st, "rerun", lambda: None)
     monkeypatch.setattr(sidebar, "set_current_page", internal_page_updates.append)
     monkeypatch.setattr(sidebar, "render_previous_concepts_sidebar", lambda: None)
     monkeypatch.setattr(sidebar, "render_voice_prompt", lambda: None)
 
     sidebar.render_controls()
 
-    assert switched_pages == ["pages/Gallery.py"]
-    assert internal_page_updates == []
+    assert internal_page_updates == ["gallery"]
 
 
 def test_included_output_presentation_block_is_removed():

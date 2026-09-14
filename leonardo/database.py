@@ -2,6 +2,9 @@ import sqlite3
 import json
 from pathlib import Path
 
+from categories import normalize_category, require_category_key
+from i18n import DEFAULT_LANGUAGE, normalize_language
+
 
 DB_PATH = Path(__file__).resolve().parent / "leonardo.db"
 
@@ -10,6 +13,25 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def migrate_legacy_concept_categories(cursor):
+    """Idempotently replace only explicitly mapped legacy category identifiers."""
+    cursor.execute("SELECT id, category FROM concepts ORDER BY id")
+    migrated = []
+    unresolved = []
+    for concept_id, stored_category in cursor.fetchall():
+        canonical_category = normalize_category(stored_category)
+        if canonical_category is None:
+            unresolved.append((concept_id, stored_category))
+            continue
+        if canonical_category != stored_category:
+            cursor.execute(
+                "UPDATE concepts SET category = ? WHERE id = ?",
+                (canonical_category, concept_id),
+            )
+            migrated.append((concept_id, stored_category, canonical_category))
+    return migrated, unresolved
 
 
 def init_db():
@@ -31,6 +53,44 @@ def init_db():
     concept_columns = [row[1] for row in cursor.fetchall()]
     if "is_favorite" not in concept_columns:
         cursor.execute("ALTER TABLE concepts ADD COLUMN is_favorite INTEGER DEFAULT 0")
+    if "concept_language" not in concept_columns:
+        cursor.execute("ALTER TABLE concepts ADD COLUMN concept_language TEXT")
+
+    migrate_legacy_concept_categories(cursor)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS concept_translations (
+            concept_id INTEGER NOT NULL,
+            language_code TEXT NOT NULL,
+            translated_content TEXT NOT NULL
+                CHECK (json_valid(translated_content)),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (concept_id, language_code),
+            FOREIGN KEY (concept_id)
+                REFERENCES concepts(id)
+                ON DELETE CASCADE
+        )
+    """)
+
+    cursor.execute(
+        """
+        UPDATE concepts
+        SET concept_language = 'en'
+        WHERE id = 19
+          AND title = 'AquaClean Station'
+          AND concept_language IS NULL
+        """
+    )
+    cursor.execute(
+        """
+        UPDATE concepts
+        SET concept_language = 'ru'
+        WHERE id = 23
+          AND title = 'Модульная система аварийных мостов'
+          AND concept_language IS NULL
+        """
+    )
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS project_images (
@@ -53,20 +113,28 @@ def init_db():
     conn.close()
 
 
-def save_concept(title, category, prompt, concept_data):
+def save_concept(
+    title,
+    category,
+    prompt,
+    concept_data,
+    concept_language=DEFAULT_LANGUAGE,
+):
+    category = require_category_key(category)
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         INSERT INTO concepts (
-            title, category, prompt, concept_json
+            title, category, prompt, concept_json, concept_language
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?)
     """, (
         title,
         category,
         prompt,
         json.dumps(concept_data, ensure_ascii=False),
+        normalize_language(concept_language),
     ))
 
     concept_id = cursor.lastrowid
@@ -121,6 +189,22 @@ def get_concept_by_id(concept_id):
     return None
 
 
+def get_concept_language(concept_id):
+    """Return the stored language code, or None for a legacy concept."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT concept_language FROM concepts WHERE id = ?",
+        (concept_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row or not row[0]:
+        return None
+    return normalize_language(row[0])
+
+
 def get_concept_prompt(concept_id):
     """Return the original user prompt stored with a concept."""
     conn = get_connection()
@@ -129,6 +213,58 @@ def get_concept_prompt(concept_id):
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
+
+
+def get_concept_translation(concept_id, language_code):
+    """Return parsed cached translation content, or None when absent."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT translated_content
+        FROM concept_translations
+        WHERE concept_id = ? AND language_code = ?
+        """,
+        (concept_id, normalize_language(language_code)),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    try:
+        value = json.loads(row[0])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("Stored concept translation is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError("Stored concept translation must be a JSON object")
+    return value
+
+
+def save_concept_translation(concept_id, language_code, translated_content):
+    """Atomically insert or replace one concept/language translation."""
+    serialized = json.dumps(translated_content, ensure_ascii=False)
+    parsed = json.loads(serialized)
+    if not isinstance(parsed, dict):
+        raise ValueError("Concept translation must be a JSON object")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO concept_translations (
+            concept_id, language_code, translated_content
+        )
+        VALUES (?, ?, ?)
+        ON CONFLICT(concept_id, language_code) DO UPDATE SET
+            translated_content = excluded.translated_content,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (concept_id, normalize_language(language_code), serialized),
+    )
+    conn.commit()
+    conn.close()
 
 
 def save_image_asset(concept_id, image_type, prompt, image_bytes):

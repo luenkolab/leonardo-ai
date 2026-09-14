@@ -1,3 +1,4 @@
+from categories import category_translation_key, normalize_category
 from i18n import LANGUAGES, normalize_language, translate
 
 
@@ -472,12 +473,10 @@ def _format(value, context):
 
 def _localized_option(kind, value, language, default):
     normalized = " ".join(str(value or "").split()).casefold()
-    if kind == "category" and normalized in {
-        "transport", "construction", "rescue", "military", "exploration",
-        "industrial", "energy", "architecture", "mechanical", "water",
-        "flight", "space", "agriculture", "medicine", "robotics",
-    }:
-        return translate(f"option.category.{normalized}", language)
+    if kind == "category":
+        category_key = normalize_category(normalized)
+        if category_key is not None:
+            return translate(category_translation_key(category_key), language)
     if kind == "audience" and normalized in _AUDIENCE_KEYS:
         return translate(f"option.audience.{_AUDIENCE_KEYS[normalized]}", language)
     return " ".join(str(value or "").split()) or default

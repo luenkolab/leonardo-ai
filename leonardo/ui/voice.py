@@ -88,8 +88,7 @@ window.speechSynthesis.speak(utterance);
     )
 
 
-def render_voice_assistant(concept_data):
-    language = get_current_language()
+def render_voice_assistant(concept_data, language):
     render_generated_section_heading(
         translate("voice.assistant", language),
         _VOICE_ASSISTANT_ICON,

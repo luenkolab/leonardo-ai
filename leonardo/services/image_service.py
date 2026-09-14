@@ -12,6 +12,7 @@ from openai import OpenAI
 
 CONCEPT_IMAGE_MODEL = "gpt-image-2"
 CONCEPT_IMAGE_SIZE = "1024x1024"
+CONCEPT_IMAGE_QUALITY = "low"
 CONCEPT_IMAGE_TIMEOUT_SECONDS = 120.0
 CONCEPT_IMAGE_MAX_ATTEMPTS = 3
 CONCEPT_IMAGE_MAX_BACKOFF_SECONDS = 8.0
@@ -438,6 +439,18 @@ def build_modern_concept_image_prompts(concept_data, design_blueprint):
     primary_subject = design_blueprint["shared_invention_lineage"][
         "primary_visual_subject"
     ]
+    visual_brief = design_blueprint["shared_invention_lineage"]["visual_brief"]
+    visual_capability_lock = f"""
+Mandatory visual capability coverage: treat the source idea and modern sketch description below as binding for all visually representable required capabilities.
+
+ORIGINAL USER PROMPT:
+{visual_brief["original_user_prompt"]}
+
+MODERN SKETCH DESCRIPTION:
+{concept_data.get("modern_sketch_description", "")}
+
+Identify and visibly preserve the concept-specific assembly, transport or deployment workflow, sensing or monitoring elements, automation mechanisms, and major subsystem interactions that these sources require. Show them through physical components, placement, connections, or operating action rather than reducing the result to a generic product render. Do not invent capabilities or equipment unsupported by the source idea and concept.
+"""
     era_interpretation = """
 Priority instruction: create a realistic present-day engineering implementation of the shared purpose. Translate the function into a commercially plausible product, service system, vehicle, structure, or piece of infrastructure using contemporary manufacturing and safety practices. The result must look buildable, maintainable, usable, and appropriate for the stated users and operating environment.
 
@@ -513,7 +526,10 @@ Square image composed for a compact slot: one clearly readable primary system, s
             role,
             (
                 ("4. Required scene and camera composition", composition),
-                ("5. Required functional elements", functional_elements),
+                (
+                    "5. Required functional elements",
+                    f"{visual_capability_lock}\n\n{functional_elements}",
+                ),
                 ("6. Era and engineering interpretation", era_interpretation),
                 ("7. Required materials and mechanisms", modern_materials),
                 ("8. Explicit prohibited elements", modern_prohibitions),
@@ -641,7 +657,7 @@ def generate_concept_image(prompt_text):
                 model=CONCEPT_IMAGE_MODEL,
                 prompt=prompt_text,
                 size=CONCEPT_IMAGE_SIZE,
-                quality="medium",
+                quality=CONCEPT_IMAGE_QUALITY,
                 output_format="png",
                 timeout=CONCEPT_IMAGE_TIMEOUT_SECONDS,
             )

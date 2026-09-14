@@ -1,78 +1,62 @@
-# Categories
-CATEGORIES = [
-    "transport",
-    "construction",
-    "rescue",
-    "military",
-    "exploration",
-    "industrial",
-    "energy",
-    "architecture",
-    "mechanical",
-    "water",
-    "flight",
-    "space",
-    "agriculture",
-    "medicine",
-    "robotics"
-]
+from categories import CATEGORY_KEYS
 
 
-# Difficulty
-DIFFICULTY = {
-    "transport": "Medium",
-    "construction": "High",
-    "rescue": "High",
-    "military": "Extreme",
-    "exploration": "High",
-    "industrial": "Medium",
-    "energy": "High",
-    "architecture": "High",
-    "mechanical": "Medium",
-    "water": "High",
-    "flight": "High",
-    "space": "Extreme",
-    "agriculture": "Medium",
-    "medicine": "Extreme",
-    "robotics": "Extreme"
-}
+DIFFICULTY = {category: "High" for category in CATEGORY_KEYS}
+DIFFICULTY.update({
+    "ai_software": "Medium",
+    "transport_mobility": "Medium",
+    "manufacturing_industry": "Medium",
+    "agriculture_food": "Medium",
+    "finance_commerce": "Medium",
+    "education": "Medium",
+    "consumer_lifestyle": "Medium",
+    "robotics_automation": "Extreme",
+    "aerospace_space": "Extreme",
+    "defense_security": "Extreme",
+    "health_biotech": "Extreme",
+    "materials_deeptech": "Extreme",
+})
 
 
-# Materials
 MATERIALS = {
-    "transport": ["electric motor", "battery pack", "wheel control system", "lightweight chassis"],
-    "construction": ["reinforced structural frame", "modular support joints", "lifting actuators", "durable composite panels"],
-    "rescue": ["lightweight rescue frame", "thermal sensors", "stabilization module", "high-strength safety harness"],
-    "military": ["reinforced alloy shell", "shock-resistant frame", "remote navigation system", "targeting module"],
-    "exploration": ["sensor array", "protective shell", "navigation controller", "modular tool arm"],
-    "industrial": ["industrial-grade frame", "control unit", "precision actuators", "durable protective casing"],
-    "energy": ["battery cells", "smart grid controller", "thermal insulation", "power conversion module"],
-    "architecture": ["load-bearing frame", "adaptive joints", "smart materials", "support modules"],
-    "mechanical": ["geared transmission", "lever assembly", "spring mechanism", "reinforced axle system"],
-    "water": ["sealed pressure shell", "marine turbine", "waterproof sensors", "composite tubing"],
-    "flight": ["carbon fiber frame", "servo motors", "flight controller", "stabilizing sensors"],
-    "space": ["heat-resistant composite", "guidance sensors", "autonomous control unit", "sealed energy module"],
-    "agriculture": ["soil sensors", "mechanical cultivator", "smart irrigation unit", "navigation controller"],
-    "medicine": ["biocompatible housing", "diagnostic sensors", "microcontroller", "sterile casing"],
-    "robotics": ["robotic joints", "camera module", "AI control board", "precision actuators"]
+    "ai_software": ["application runtime", "data interfaces", "model evaluation tools", "secure hosting"],
+    "robotics_automation": ["robotic joints", "camera module", "control board", "precision actuators"],
+    "transport_mobility": ["electric motor", "battery pack", "control system", "lightweight chassis"],
+    "construction_architecture": ["structural frame", "modular joints", "lifting actuators", "composite panels"],
+    "infrastructure": ["structural modules", "monitoring sensors", "control equipment", "protective enclosures"],
+    "manufacturing_industry": ["industrial frame", "control unit", "precision actuators", "protective casing"],
+    "energy": ["battery cells", "grid controller", "thermal insulation", "power conversion module"],
+    "climate_environment": ["environmental sensors", "sampling equipment", "control unit", "weatherproof housing"],
+    "water": ["sealed pressure shell", "fluid handling system", "waterproof sensors", "composite tubing"],
+    "health_biotech": ["biocompatible housing", "diagnostic sensors", "microcontroller", "sterile casing"],
+    "agriculture_food": ["soil sensors", "mechanical cultivator", "irrigation unit", "navigation controller"],
+    "aerospace_space": ["lightweight composite", "guidance sensors", "autonomous control unit", "sealed energy module"],
+    "defense_security": ["reinforced enclosure", "shock-resistant frame", "remote navigation system", "secure control module"],
+    "emergency_rescue": ["lightweight rescue frame", "thermal sensors", "stabilization module", "safety harness"],
+    "materials_deeptech": ["experimental material samples", "fabrication tooling", "measurement sensors", "test fixtures"],
+    "finance_commerce": ["secure application runtime", "transaction interfaces", "audit storage", "analytics tools"],
+    "education": ["learning interface", "content modules", "assessment tools", "accessible devices"],
+    "consumer_lifestyle": ["user interface", "replaceable components", "control electronics", "durable housing"],
 }
 
 
-# Use Cases
 USE_CASES = {
-    "transport": ["urban delivery", "smart mobility", "industrial logistics", "campus transport"],
-    "construction": ["bridge assembly", "modular shelters", "infrastructure deployment", "disaster rebuilding"],
-    "rescue": ["fire evacuation", "mountain rescue", "disaster response", "rapid emergency deployment"],
-    "military": ["defense support", "remote tactical operations", "simulation systems", "protective engineering"],
-    "exploration": ["terrain mapping", "hazard inspection", "scientific missions", "remote exploration"],
-    "industrial": ["factory automation", "inspection workflows", "heavy-duty transport", "industrial maintenance"],
-    "energy": ["smart power systems", "green infrastructure", "remote energy delivery", "industrial optimization"],
-    "architecture": ["rapid deployment structures", "emergency shelters", "adaptive buildings", "civil engineering demos"],
-    "mechanical": ["mechanism prototyping", "engineering education", "motion systems", "precision assembly"],
-    "water": ["marine exploration", "underwater inspection", "rescue operations", "environmental research"],
-    "flight": ["rescue missions", "aerial mapping", "surveillance", "scientific observation"],
-    "space": ["orbital maintenance", "planetary exploration", "autonomous research", "space logistics"],
-    "agriculture": ["precision farming", "soil monitoring", "crop management", "automated harvesting"],
-    "medicine": ["diagnostics", "remote monitoring", "hospital support systems", "medical training"],
-    "robotics": ["industrial automation", "education", "inspection", "research and development"]
+    "ai_software": ["workflow automation", "decision support", "data analysis", "software services"],
+    "robotics_automation": ["industrial automation", "inspection", "research", "assisted operations"],
+    "transport_mobility": ["urban delivery", "smart mobility", "industrial logistics", "campus transport"],
+    "construction_architecture": ["modular structures", "adaptive buildings", "civil engineering", "rapid construction"],
+    "infrastructure": ["public works", "network resilience", "asset monitoring", "emergency restoration"],
+    "manufacturing_industry": ["factory automation", "inspection workflows", "industrial maintenance", "production control"],
+    "energy": ["smart power systems", "energy storage", "remote energy delivery", "industrial optimization"],
+    "climate_environment": ["environmental monitoring", "emissions reduction", "ecosystem restoration", "climate resilience"],
+    "water": ["water treatment", "underwater inspection", "water distribution", "environmental research"],
+    "health_biotech": ["diagnostics", "remote monitoring", "clinical support", "biotechnology research"],
+    "agriculture_food": ["precision farming", "soil monitoring", "food production", "automated harvesting"],
+    "aerospace_space": ["aerial mapping", "orbital maintenance", "scientific observation", "space logistics"],
+    "defense_security": ["protective engineering", "secure operations", "remote inspection", "resilience planning"],
+    "emergency_rescue": ["fire evacuation", "mountain rescue", "disaster response", "rapid deployment"],
+    "materials_deeptech": ["material validation", "advanced manufacturing", "performance testing", "research tooling"],
+    "finance_commerce": ["financial operations", "commerce automation", "risk analysis", "transaction services"],
+    "education": ["classroom learning", "technical training", "remote education", "skills assessment"],
+    "consumer_lifestyle": ["home use", "personal productivity", "recreation", "daily-life assistance"],
 }

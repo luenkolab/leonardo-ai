@@ -1,17 +1,22 @@
 import streamlit as st
 
+from categories import CATEGORY_KEYS
 from application.concepts import (
     ConceptLoadError,
     list_recent_concepts,
-    load_concept,
+    load_concept_for_viewer,
     remove_concept,
     toggle_concept_favorite,
 )
-from config import CATEGORIES
-from i18n import LANGUAGES, translate
+from i18n import LANGUAGES, category_display_name, translate
 from ui.formatting import safe_text
 from ui.state import (
+    GENERATE_IMAGES,
+    GENERATE_IMAGES_WIDGET,
+    IDEA_CATEGORY,
     LANGUAGE,
+    USER_PROMPT,
+    USER_PROMPT_WIDGET,
     clear_automatic_image_generation_state,
     clear_current_concept,
     clear_transient_visuals,
@@ -34,6 +39,38 @@ def render_language_selector():
     )
 
 
+def _render_primary_navigation(language):
+    navigation = (
+        ("app", "nav.app"),
+        ("gallery", "nav.gallery"),
+        ("marketplace", "nav.marketplace"),
+    )
+    for page, translation_key in navigation:
+        if st.button(
+            translate(translation_key, language),
+            key=f"nav_{page}",
+            use_container_width=True,
+        ):
+            set_current_page(page)
+            st.rerun()
+
+
+def render_navigation_sidebar():
+    with st.sidebar:
+        render_language_selector()
+        _render_primary_navigation(get_current_language())
+
+
+def _sync_generate_images_setting():
+    st.session_state[GENERATE_IMAGES] = bool(
+        st.session_state.get(GENERATE_IMAGES_WIDGET, False)
+    )
+
+
+def _sync_user_prompt():
+    st.session_state[USER_PROMPT] = st.session_state.get(USER_PROMPT_WIDGET, "")
+
+
 def render_previous_concepts_sidebar():
     language = get_current_language()
     with st.expander(translate('sidebar.previous_concepts', language), expanded=False, key="previous_concepts"):
@@ -51,7 +88,7 @@ def render_previous_concepts_sidebar():
 <div class="mini-card">
     <h4>{favorite_marker}{safe_text(title)}</h4>
     <div class="small-note">
-        {safe_text(translate('common.category', language))}: {safe_text(translate(f'option.category.{category}', language))}<br>
+        {safe_text(translate('common.category', language))}: {safe_text(category_display_name(category, language))}<br>
         {safe_text(translate('common.created', language))}: {safe_text(created_at)}
     </div>
 </div>
@@ -64,14 +101,20 @@ def render_previous_concepts_sidebar():
             with c1:
                 if st.button(" ", key=f"open_concept_{concept_id}", use_container_width=True, help=translate("sidebar.previous_concepts", language)):
                     try:
-                        selected_concept = load_concept(concept_id)
+                        selected_concept, concept_language = (
+                            load_concept_for_viewer(concept_id, language)
+                        )
                     except ConceptLoadError:
                         st.error(
                             translate("sidebar.open_error", language)
                         )
                     else:
                         if selected_concept:
-                            set_current_concept(selected_concept, concept_id)
+                            set_current_concept(
+                                selected_concept,
+                                concept_id,
+                                concept_language or language,
+                            )
                             clear_transient_visuals()
                             clear_automatic_image_generation_state()
                             st.rerun()
@@ -93,16 +136,7 @@ def render_controls():
     with st.sidebar:
         render_language_selector()
         language = get_current_language()
-
-        nav1 = st.button(translate('nav.app', language), key="nav_app", use_container_width=True)
-        nav2 = st.button(translate('nav.gallery', language), key="nav_gallery", use_container_width=True)
-
-        if nav1:
-            set_current_page("app")
-            st.rerun()
-
-        if nav2:
-            st.switch_page("pages/Gallery.py")
+        _render_primary_navigation(language)
 
         render_previous_concepts_sidebar()
 
@@ -112,8 +146,9 @@ def render_controls():
 
         category = st.selectbox(
             translate("sidebar.idea_category", language),
-            CATEGORIES,
-            format_func=lambda value: translate(f"option.category.{value}", language),
+            CATEGORY_KEYS,
+            format_func=lambda value: category_display_name(value, language),
+            key=IDEA_CATEGORY,
         )
 
         creativity_mode = st.selectbox(
@@ -128,10 +163,20 @@ def render_controls():
             format_func=lambda value: translate(f"option.audience.{value.lower().replace(' ', '_')}", language),
         )
 
+        st.session_state[GENERATE_IMAGES_WIDGET] = st.session_state[GENERATE_IMAGES]
+        st.toggle(
+            translate("sidebar.generate_images", language),
+            key=GENERATE_IMAGES_WIDGET,
+            on_change=_sync_generate_images_setting,
+        )
+
+        st.session_state[USER_PROMPT_WIDGET] = st.session_state[USER_PROMPT]
         user_prompt = st.text_area(
             translate("sidebar.prompt", language),
             placeholder=translate("sidebar.prompt_placeholder", language),
             height=120,
+            key=USER_PROMPT_WIDGET,
+            on_change=_sync_user_prompt,
         )
 
         generate = st.button(translate('sidebar.generate', language), key="generate_idea", use_container_width=True, type="primary")

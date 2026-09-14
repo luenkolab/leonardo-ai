@@ -322,6 +322,31 @@ def test_modern_prompts_allow_realistic_contemporary_engineering(valid_concept):
         assert "buildable, maintainable, usable" in prompt
 
 
+def test_modern_prompts_bind_source_visual_capabilities_and_sketch_description(
+    valid_concept,
+):
+    source_prompt = (
+        "The system must visibly coordinate field deployment and remote condition sensing."
+    )
+    modern_sketch_description = (
+        "Show deployable support modules connected to distributed condition-sensing nodes."
+    )
+    concept = {
+        **valid_concept,
+        "modern_sketch_description": modern_sketch_description,
+    }
+    blueprint = image_service.build_design_blueprint(concept, source_prompt)
+    prompts = image_service.build_modern_concept_image_prompts(concept, blueprint)
+
+    for prompt in prompts.values():
+        assert "Mandatory visual capability coverage" in prompt
+        assert source_prompt in prompt
+        assert modern_sketch_description in prompt
+        assert "binding for all visually representable required capabilities" in prompt
+        assert "physical components, placement, connections, or operating action" in prompt
+        assert "Do not invent capabilities or equipment" in prompt
+
+
 def test_each_role_has_a_distinct_camera_composition(valid_concept):
     _, leonardo, modern = _build_prompt_sets(valid_concept)
 
@@ -561,13 +586,16 @@ def test_generation_event_is_started_after_concept_is_saved(
     monkeypatch.setattr(
         concept_page,
         "set_current_concept",
-        lambda concept, concept_id: events.append(("set-concept", concept_id)),
+        lambda concept, concept_id, language: events.append(
+            ("set-concept", concept_id, language)
+        ),
     )
     monkeypatch.setattr(
         concept_page,
         "start_automatic_image_generation",
         lambda concept_id: events.append(("start-images", concept_id)),
     )
+    monkeypatch.setattr(concept_page, "get_generate_images_enabled", lambda: True)
     monkeypatch.setattr(concept_page.st, "spinner", lambda *args, **kwargs: nullcontext())
     monkeypatch.setattr(concept_page.st, "rerun", lambda: events.append("rerun"))
 
@@ -583,10 +611,51 @@ def test_generation_event_is_started_after_concept_is_saved(
     assert events == [
         "clear-visuals",
         "save-concept",
-        ("set-concept", 42),
+        ("set-concept", 42, "en"),
         ("start-images", 42),
         "rerun",
     ]
+
+
+def test_generation_with_images_disabled_saves_text_without_starting_images(
+    valid_concept,
+    monkeypatch,
+):
+    events = []
+
+    monkeypatch.setattr(concept_page, "get_current_concept", lambda: None)
+    monkeypatch.setattr(concept_page, "clear_transient_visuals", lambda: None)
+    monkeypatch.setattr(
+        concept_page,
+        "generate_and_save_concept",
+        lambda **kwargs: (valid_concept, 43),
+    )
+    monkeypatch.setattr(concept_page, "set_current_concept", lambda *args: None)
+    monkeypatch.setattr(concept_page, "get_generate_images_enabled", lambda: False)
+    monkeypatch.setattr(
+        concept_page,
+        "start_automatic_image_generation",
+        lambda concept_id: events.append(("image-api", concept_id)),
+    )
+    monkeypatch.setattr(
+        concept_page,
+        "clear_automatic_image_generation_state",
+        lambda: events.append("clear-image-state"),
+    )
+    monkeypatch.setattr(concept_page.st, "spinner", lambda *args, **kwargs: nullcontext())
+    monkeypatch.setattr(concept_page.st, "rerun", lambda: None)
+
+    result = concept_page.generate_or_load_concept(
+        category="robotics",
+        creativity_mode="Bold",
+        audience="Engineers",
+        user_prompt="A practical rescue device",
+        generate=True,
+        regenerate=False,
+    )
+
+    assert result == valid_concept
+    assert events == ["clear-image-state"]
 
 
 def test_loading_saved_concept_does_not_start_generation(monkeypatch, valid_concept):
@@ -654,6 +723,42 @@ def test_existing_image_types_are_skipped(monkeypatch, valid_concept):
     assert all(results[image_type]["status"] == "skipped" for image_type in existing_types)
 
 
+def test_images_enabled_path_generates_all_six_automatic_slots(
+    monkeypatch,
+    valid_concept,
+):
+    generated_prompts = []
+    saved_types = []
+    _stub_automatic_prompts(monkeypatch)
+    monkeypatch.setattr(
+        application_images,
+        "list_automatic_concept_images",
+        lambda concept_id: [],
+    )
+    monkeypatch.setattr(
+        application_images,
+        "generate_concept_image",
+        lambda prompt: (
+            generated_prompts.append(prompt)
+            or {"prompt": prompt, "image_bytes": b"generated"}
+        ),
+    )
+    monkeypatch.setattr(
+        application_images,
+        "save_visual",
+        lambda concept_id, image_type, asset: saved_types.append(image_type),
+    )
+
+    results = application_images.generate_and_save_concept_images(
+        valid_concept,
+        concept_id=55,
+    )
+
+    assert len(generated_prompts) == 6
+    assert set(saved_types) == set(application_images.CONCEPT_IMAGE_TYPES)
+    assert {result["status"] for result in results.values()} == {"saved"}
+
+
 def test_all_existing_images_prevent_duplicate_generation(
     monkeypatch,
     valid_concept,
@@ -693,6 +798,7 @@ def test_rerun_without_matching_pending_marker_does_not_generate(
     monkeypatch,
     valid_concept,
 ):
+    monkeypatch.setattr(concept_page, "get_generate_images_enabled", lambda: True)
     monkeypatch.setattr(
         concept_page,
         "get_automatic_image_pending_concept_id",
@@ -709,6 +815,32 @@ def test_rerun_without_matching_pending_marker_does_not_generate(
     )
 
     concept_page._run_pending_automatic_image_generation(valid_concept, 55)
+
+
+def test_pending_generation_is_cancelled_when_images_are_disabled(
+    monkeypatch,
+    valid_concept,
+):
+    events = []
+    monkeypatch.setattr(concept_page, "get_generate_images_enabled", lambda: False)
+    monkeypatch.setattr(
+        concept_page,
+        "clear_automatic_image_generation_state",
+        lambda: events.append("cleared"),
+    )
+
+    def unexpected_generation(*args, **kwargs):
+        events.append("image-api")
+
+    monkeypatch.setattr(
+        concept_page,
+        "generate_and_save_concept_images",
+        unexpected_generation,
+    )
+
+    concept_page._run_pending_automatic_image_generation(valid_concept, 55)
+
+    assert events == ["cleared"]
 
 
 def test_partial_failure_keeps_and_persists_successful_images(
@@ -834,6 +966,37 @@ def test_consecutive_concepts_never_share_automatic_image_slots(
     assert all(record[4].startswith(b"A:") for record in restored_a_slots.values())
 
 
+def test_new_concept_with_images_disabled_never_uses_previous_concept_images(
+    temporary_database,
+    valid_concept,
+    monkeypatch,
+):
+    concept_a_id = _save_concept(valid_concept, "Concept A")
+    for image_type in application_images.CONCEPT_IMAGE_TYPES:
+        database.save_image_asset(
+            concept_id=concept_a_id,
+            image_type=image_type,
+            prompt=f"A:{image_type}",
+            image_bytes=f"A:{image_type}".encode(),
+        )
+
+    concept_b = {**valid_concept, "title": "Concept B"}
+    concept_b_id = _save_concept(concept_b, "Concept B")
+    session_state = {}
+    monkeypatch.setattr(state.st, "session_state", session_state)
+    state.initialize_session_state()
+    state.set_current_concept(concept_b, concept_b_id)
+
+    assert state.get_generate_images_enabled() is False
+    assert application_images.get_concept_image_slots(concept_b_id) == {}
+    assert {
+        record[1]
+        for record in application_images.get_concept_image_slots(
+            concept_a_id
+        ).values()
+    } == {concept_a_id}
+
+
 def test_failed_new_concept_generation_never_falls_back_to_previous_images(
     temporary_database,
     valid_concept,
@@ -923,7 +1086,7 @@ def test_current_sdk_image_call_and_png_validation(png_bytes, monkeypatch):
     assert asset == {"prompt": "test role prompt", "image_bytes": png_bytes}
     assert captured["model"] == "gpt-image-2"
     assert captured["size"] == "1024x1024"
-    assert captured["quality"] == "medium"
+    assert captured["quality"] == "low"
     assert captured["output_format"] == "png"
     assert captured["timeout"] == 120.0
 
@@ -1055,7 +1218,14 @@ def test_result_sections_render_three_slots_for_each_image_family(
     monkeypatch.setattr(concept_page.st, "caption", lambda *args, **kwargs: None)
     monkeypatch.setattr(concept_page, "render_result_box", lambda *args, **kwargs: None)
 
-    concept_page._render_leonardo_vision(valid_concept, 101, {}, False, {})
+    concept_page._render_leonardo_vision(
+        valid_concept,
+        101,
+        {},
+        False,
+        {},
+        "en",
+    )
     concept_page._render_modern_implementation(
         valid_concept,
         valid_concept["title"],
@@ -1063,6 +1233,7 @@ def test_result_sections_render_three_slots_for_each_image_family(
         {},
         False,
         {},
+        "en",
     )
 
     assert tuple(rendered_types) == (

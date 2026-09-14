@@ -4,8 +4,12 @@ import unicodedata
 
 import streamlit as st
 
-from i18n import translate
-from application.concepts import generate_and_save_concept
+from i18n import category_display_name, translate
+from application.concepts import (
+    ConceptLoadError,
+    generate_and_save_concept,
+    load_concept_for_viewer,
+)
 from application.images import (
     CONCEPT_IMAGE_TYPES,
     LEONARDO_CONCEPT_IMAGE_TYPES,
@@ -25,6 +29,7 @@ from ui.images import render_generated_visuals
 from ui.state import (
     BLUEPRINT_ASSET,
     LEONARDO_ASSET,
+    clear_automatic_image_generation_state,
     clear_transient_visuals,
     finish_automatic_image_generation,
     get_automatic_image_errors,
@@ -32,6 +37,7 @@ from ui.state import (
     get_current_concept,
     get_current_concept_id,
     get_current_language,
+    get_generate_images_enabled,
     set_current_concept,
     start_automatic_image_generation,
 )
@@ -96,29 +102,33 @@ def generate_or_load_concept(
     if generate or regenerate:
 
         clear_transient_visuals()
+        ui_language = get_current_language()
 
         prompt_text = (
             user_prompt.strip()
             if user_prompt.strip()
             else translate(
                 "concept.default_prompt",
-                get_current_language(),
-                category=translate(f"option.category.{category}", get_current_language()),
+                ui_language,
+                category=category_display_name(category, ui_language),
             )
         )
 
-        with st.spinner(translate("concept.generating", get_current_language())):
+        with st.spinner(translate("concept.generating", ui_language)):
 
             concept_data, concept_id = generate_and_save_concept(
                 category=category,
                 creativity_mode=creativity_mode,
                 audience=audience,
                 user_prompt=prompt_text,
-                language=get_current_language(),
+                language=ui_language,
             )
 
-        set_current_concept(concept_data, concept_id)
-        start_automatic_image_generation(concept_id)
+        set_current_concept(concept_data, concept_id, ui_language)
+        if get_generate_images_enabled():
+            start_automatic_image_generation(concept_id)
+        else:
+            clear_automatic_image_generation_state()
         st.rerun()
 
     return concept_data
@@ -161,8 +171,8 @@ def _render_leonardo_vision(
     concept_images,
     is_pending,
     image_errors,
+    language,
 ):
-    language = get_current_language()
     with st.container(border=False, key="leonardo_section"):
         st.markdown(
             f"""
@@ -212,8 +222,8 @@ def _render_modern_implementation(
     concept_images,
     is_pending,
     image_errors,
+    language,
 ):
-    language = get_current_language()
     with st.container(border=False, key="modern_section"):
         st.markdown(
             f"""
@@ -263,8 +273,7 @@ def _render_modern_implementation(
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _render_visual_generation(concept_data):
-    language = get_current_language()
+def _render_visual_generation(concept_data, language):
     render_generated_section_heading(
         translate("concept.visual_generation", language),
         _GENERATED_SECTION_ICONS["visual"],
@@ -297,7 +306,7 @@ def _render_visual_generation(concept_data):
             use_container_width=True,
         )
 
-    if generate_leonardo_image:
+    if generate_leonardo_image and get_generate_images_enabled():
         with st.spinner(translate("concept.generating_leonardo", language)):
             try:
                 st.session_state[LEONARDO_ASSET] = generate_leonardo_visual(
@@ -306,7 +315,7 @@ def _render_visual_generation(concept_data):
             except Exception as e:
                 st.error(translate("concept.leonardo_error", language, error=e))
 
-    if generate_blueprint_image:
+    if generate_blueprint_image and get_generate_images_enabled():
         with st.spinner(translate("concept.generating_blueprint", language)):
             try:
                 st.session_state[BLUEPRINT_ASSET] = generate_blueprint_visual(
@@ -315,20 +324,19 @@ def _render_visual_generation(concept_data):
             except Exception as e:
                 st.error(translate("concept.blueprint_error", language, error=e))
 
-    render_generated_visuals()
+    render_generated_visuals(language)
 
 
-def _render_implementation_roadmap(concept_data):
-    language = get_current_language()
+def _render_implementation_roadmap(concept_data, language):
     render_generated_section_heading(
         translate("concept.roadmap", language),
         _GENERATED_SECTION_ICONS["roadmap"],
     )
     guides = concept_data["implementation_guides"]
-    render_complete_guide(translate("concept.prototype", language), guides["prototype"], key="roadmap_prototype")
-    render_complete_guide(translate("concept.mvp", language), guides["mvp"], key="roadmap_mvp")
-    render_complete_guide(translate("concept.pilot", language), guides["pilot"], key="roadmap_pilot")
-    render_complete_guide(translate("concept.production", language), guides["production"], key="roadmap_production")
+    render_complete_guide(translate("concept.prototype", language), guides["prototype"], language, key="roadmap_prototype")
+    render_complete_guide(translate("concept.mvp", language), guides["mvp"], language, key="roadmap_mvp")
+    render_complete_guide(translate("concept.pilot", language), guides["pilot"], language, key="roadmap_pilot")
+    render_complete_guide(translate("concept.production", language), guides["production"], language, key="roadmap_production")
 
     render_result_box(
         translate("concept.deployment_strategy", language),
@@ -338,8 +346,7 @@ def _render_implementation_roadmap(concept_data):
     )
 
 
-def _render_risks_and_constraints(concept_data):
-    language = get_current_language()
+def _render_risks_and_constraints(concept_data, language):
     render_generated_section_heading(
         translate("concept.risks_constraints", language),
         _GENERATED_SECTION_ICONS["risks"],
@@ -348,8 +355,7 @@ def _render_risks_and_constraints(concept_data):
     render_result_box(translate("concept.constraints", language), concept_data["constraints"], icon_svg=_GENERATED_RESULT_ICONS["constraint"], visual_variant="constraint")
 
 
-def _render_commercial_outlook(concept_data):
-    language = get_current_language()
+def _render_commercial_outlook(concept_data, language):
     render_generated_section_heading(translate("concept.commercial_outlook", language), _GENERATED_SECTION_ICONS["commercial"])
     render_result_box(translate("concept.market_demand", language), concept_data["market_demand"], icon_svg=_GENERATED_RESULT_ICONS["market"])
     render_result_box(translate("concept.startup_cost", language), concept_data["startup_cost"], icon_svg=_GENERATED_RESULT_ICONS["cost"])
@@ -357,8 +363,7 @@ def _render_commercial_outlook(concept_data):
     render_result_box(translate("concept.investor_summary", language), concept_data["investor_summary"], icon_svg=_GENERATED_RESULT_ICONS["investor"])
 
 
-def _render_delivery_metrics(concept_data):
-    language = get_current_language()
+def _render_delivery_metrics(concept_data, language):
     render_generated_section_heading(translate("concept.delivery_metrics", language), _GENERATED_SECTION_ICONS["metrics"])
     render_result_box(translate("concept.concept_difficulty", language), concept_data["difficulty"], icon_svg=_GENERATED_RESULT_ICONS["concept_complexity"], visual_variant="blue")
     render_result_box(translate("concept.modern_difficulty", language), concept_data["modern_difficulty"], icon_svg=_GENERATED_RESULT_ICONS["modern_complexity"], visual_variant="blue")
@@ -394,8 +399,7 @@ def _safe_pdf_filename(title):
     return f"{cleaned_title}.pdf"
 
 
-def _render_pdf_export(concept_data, title):
-    language = get_current_language()
+def _render_pdf_export(concept_data, title, language):
     pdf_filename = _safe_pdf_filename(title)
 
     if st.button(translate("concept.export_pdf", language), key="export_pdf_main"):
@@ -415,6 +419,10 @@ def _render_pdf_export(concept_data, title):
 
 
 def _run_pending_automatic_image_generation(concept_data, concept_id):
+    if not get_generate_images_enabled():
+        clear_automatic_image_generation_state()
+        return
+
     if get_automatic_image_pending_concept_id() != concept_id:
         return
 
@@ -436,8 +444,21 @@ def _run_pending_automatic_image_generation(concept_data, concept_id):
 
 
 def render_concept_result(concept_data):
-    title = concept_data["title"]
+    original_concept_data = concept_data
     current_concept_id = get_current_concept_id()
+    viewer_language = get_current_language()
+    if current_concept_id is not None:
+        try:
+            translated_concept, _source_language = load_concept_for_viewer(
+                current_concept_id,
+                viewer_language,
+            )
+        except ConceptLoadError:
+            translated_concept = None
+        if translated_concept is not None:
+            concept_data = translated_concept
+
+    title = concept_data["title"]
     concept_images = (
         get_concept_image_slots(current_concept_id)
         if current_concept_id is not None
@@ -453,7 +474,7 @@ def render_concept_result(concept_data):
         else {}
     )
 
-    st.success(translate("concept.generated", get_current_language()))
+    st.success(translate("concept.generated", viewer_language))
 
     _render_leonardo_vision(
         concept_data,
@@ -461,6 +482,7 @@ def render_concept_result(concept_data):
         concept_images,
         is_pending,
         image_errors,
+        viewer_language,
     )
     _render_modern_implementation(
         concept_data,
@@ -469,13 +491,17 @@ def render_concept_result(concept_data):
         concept_images,
         is_pending,
         image_errors,
+        viewer_language,
     )
-    _render_visual_generation(concept_data)
-    _render_implementation_roadmap(concept_data)
-    _render_risks_and_constraints(concept_data)
-    _render_commercial_outlook(concept_data)
-    render_voice_assistant(concept_data)
-    _render_delivery_metrics(concept_data)
-    _render_pdf_export(concept_data, title)
+    _render_visual_generation(concept_data, viewer_language)
+    _render_implementation_roadmap(concept_data, viewer_language)
+    _render_risks_and_constraints(concept_data, viewer_language)
+    _render_commercial_outlook(concept_data, viewer_language)
+    render_voice_assistant(concept_data, viewer_language)
+    _render_delivery_metrics(concept_data, viewer_language)
+    _render_pdf_export(concept_data, title, viewer_language)
     if current_concept_id is not None:
-        _run_pending_automatic_image_generation(concept_data, current_concept_id)
+        _run_pending_automatic_image_generation(
+            original_concept_data,
+            current_concept_id,
+        )

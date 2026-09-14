@@ -2,7 +2,6 @@ import streamlit as st
 
 from i18n import translate
 from ui.formatting import safe_list, safe_text
-from ui.state import get_current_language
 
 
 _ROADMAP_SUBHEADING_ICONS = {
@@ -75,8 +74,7 @@ def render_section_heading(title):
     )
 
 
-def render_complete_guide(stage_name, guide, key=None):
-    language = get_current_language()
+def render_complete_guide(stage_name, guide, language, key=None):
     with st.expander(
         translate("guide.complete", language, stage=stage_name),
         key=key,

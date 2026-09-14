@@ -1,4 +1,6 @@
+from categories import require_category_key
 from config import DIFFICULTY, MATERIALS, USE_CASES
+from i18n import category_display_name
 from services.fallback_translations import (
     build_localized_fallback_concept,
     normalize_fallback_language,
@@ -7,7 +9,7 @@ from services.fallback_translations import (
 
 _DEFAULT_PROMPT = "a practical idea that requires a clearer user brief"
 _DEFAULT_AUDIENCE = "prospective users"
-_DEFAULT_CATEGORY = "general innovation"
+_DEFAULT_CATEGORY = "ai_software"
 
 
 _IDEA_LENSES = (
@@ -331,7 +333,7 @@ def _select_idea_lens(prompt_text, category):
 
 
 def generate_difficulty(category, creativity_mode):
-    category_key = _normalize_text(category, _DEFAULT_CATEGORY).casefold()
+    category_key = require_category_key(category)
     base = DIFFICULTY.get(category_key, "High")
     if _resolve_creativity_mode(creativity_mode) == "high" and base == "Medium":
         return "High"
@@ -339,12 +341,12 @@ def generate_difficulty(category, creativity_mode):
 
 
 def generate_modern_difficulty(category):
-    category_key = _normalize_text(category, _DEFAULT_CATEGORY).casefold()
+    category_key = require_category_key(category)
     return DIFFICULTY.get(category_key, "High")
 
 
 def generate_materials(category):
-    category_key = _normalize_text(category, _DEFAULT_CATEGORY).casefold()
+    category_key = require_category_key(category)
     return list(
         MATERIALS.get(
             category_key,
@@ -358,7 +360,7 @@ def generate_materials(category):
 
 
 def generate_use_cases(category):
-    category_key = _normalize_text(category, _DEFAULT_CATEGORY).casefold()
+    category_key = require_category_key(category)
     return list(
         USE_CASES.get(
             category_key,
@@ -469,33 +471,33 @@ def build_fallback_concept(
     audience,
     language="en",
 ):
+    category_key = require_category_key(category)
     normalized_language = normalize_fallback_language(language)
     if normalized_language != "en":
-        category_text = _normalize_text(category, _DEFAULT_CATEGORY)
         return build_localized_fallback_concept(
             language=normalized_language,
-            category=category,
+            category=category_key,
             prompt_text=prompt_text,
             creativity_mode=creativity_mode,
             audience=audience,
             mode=_resolve_creativity_mode(creativity_mode),
-            difficulty=generate_difficulty(category_text, creativity_mode),
-            modern_difficulty=generate_modern_difficulty(category_text),
+            difficulty=generate_difficulty(category_key, creativity_mode),
+            modern_difficulty=generate_modern_difficulty(category_key),
         )
 
     prompt = _normalize_text(prompt_text, _DEFAULT_PROMPT)
     audience_text = _normalize_text(audience, _DEFAULT_AUDIENCE)
-    category_text = _normalize_text(category, _DEFAULT_CATEGORY)
+    category_text = category_display_name(category_key, "en")
     mode = _resolve_creativity_mode(creativity_mode)
     profile = _CREATIVITY_PROFILES[mode]
 
     title_fragment = _title_fragment(prompt)
-    lens = _select_idea_lens(prompt, category_text)
+    lens = _select_idea_lens(prompt, category_key)
     materials = list(lens["materials"])
     category_use_cases = list(lens["use_cases"])
     optional_features = profile["optional_features"]
-    difficulty = generate_difficulty(category_text, creativity_mode)
-    modern_difficulty = generate_modern_difficulty(category_text)
+    difficulty = generate_difficulty(category_key, creativity_mode)
+    modern_difficulty = generate_modern_difficulty(category_key)
 
     implementation_roadmap = {
         stage: (

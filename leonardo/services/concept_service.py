@@ -1,5 +1,6 @@
 from pydantic import ValidationError
 
+from categories import require_category_key
 from services.ai_service import generate_ai_concept
 from services.concept_schema import validate_concept_data
 from services.fallback_service import build_fallback_concept
@@ -16,6 +17,8 @@ def generate_concept(
     Main concept generation logic
     Decides between AI and fallback
     """
+
+    category = require_category_key(category)
 
     try:
         # Try AI first

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from config import CATEGORIES
+from categories import CATEGORY_KEYS
 from i18n import LANGUAGES
 from services import concept_service, fallback_service, fallback_translations
 from services.concept_schema import ConceptData, validate_concept_data
@@ -254,7 +254,7 @@ def test_empty_prompt_and_audience_are_safely_normalized():
     assert "prospective users" in empty["executive_summary"]
 
 
-@pytest.mark.parametrize("category", CATEGORIES)
+@pytest.mark.parametrize("category", CATEGORY_KEYS)
 def test_all_categories_pass_schema_validation(category):
     result = build_fallback_concept(
         category=category,

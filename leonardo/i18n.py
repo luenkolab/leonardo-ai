@@ -1,3 +1,11 @@
+from categories import (
+    CATEGORY_KEYS,
+    CATEGORY_TRANSLATIONS,
+    category_translation_key,
+    normalize_category,
+)
+
+
 DEFAULT_LANGUAGE = "en"
 LANGUAGE_SESSION_KEY = "language"
 
@@ -22,6 +30,7 @@ _ENGLISH = {
     "language": "Language",
     "nav.app": "App",
     "nav.gallery": "Gallery",
+    "nav.marketplace": "Marketplace",
     "sidebar.previous_concepts": "Previous Concepts",
     "sidebar.no_saved_concepts": "No saved concepts yet.",
     "sidebar.open_error": "Unable to open the saved concept: its data is corrupted or uses an outdated format.",
@@ -30,6 +39,7 @@ _ENGLISH = {
     "sidebar.idea_category": "Idea Category",
     "sidebar.creativity_mode": "Creativity Mode",
     "sidebar.target_audience": "Target Audience",
+    "sidebar.generate_images": "Generate Images",
     "sidebar.prompt": "Prompt / Idea",
     "sidebar.prompt_placeholder": "Create a Renaissance-inspired rescue glider for dangerous mountain missions...",
     "sidebar.generate": "Generate Idea",
@@ -183,6 +193,16 @@ _ENGLISH = {
     "gallery.concept_id": "Concept ID",
     "gallery.type.leonardo": "Leonardo",
     "gallery.type.blueprint": "Blueprint",
+    "marketplace.title": "Investor Marketplace",
+    "marketplace.subtitle": "Discover projects. Connect ideas with capital.",
+    "marketplace.search": "Search projects...",
+    "marketplace.filters": "Filters",
+    "marketplace.categories": "Project categories",
+    "marketplace.category.all": "All",
+    "marketplace.stage": "Stage",
+    "marketplace.funding": "Funding / Seeking",
+    "marketplace.view_project": "View Project",
+    "marketplace.no_projects": "No projects match these filters.",
     "asset.not_found": "Required image could not be loaded.",
     "option.creativity.classic": "Classic",
     "option.creativity.bold": "Bold",
@@ -191,21 +211,6 @@ _ENGLISH = {
     "option.audience.investors": "Investors",
     "option.audience.students": "Students",
     "option.audience.general_public": "General Public",
-    "option.category.transport": "Transport",
-    "option.category.construction": "Construction",
-    "option.category.rescue": "Rescue",
-    "option.category.military": "Military",
-    "option.category.exploration": "Exploration",
-    "option.category.industrial": "Industrial",
-    "option.category.energy": "Energy",
-    "option.category.architecture": "Architecture",
-    "option.category.mechanical": "Mechanical",
-    "option.category.water": "Water",
-    "option.category.flight": "Flight",
-    "option.category.space": "Space",
-    "option.category.agriculture": "Agriculture",
-    "option.category.medicine": "Medicine",
-    "option.category.robotics": "Robotics",
     "pdf.package_subtitle": "AI Invention Concept and Engineering Package",
     "pdf.untitled": "Untitled Project",
     "pdf.not_available": "N/A",
@@ -269,18 +274,18 @@ _CORE_TRANSLATIONS = {
 
 
 _OPTION_TRANSLATIONS = {
-    "es": {"option.creativity.classic": "Clásico", "option.creativity.bold": "Audaz", "option.creativity.experimental": "Experimental", "option.audience.engineers": "Ingenieros", "option.audience.investors": "Inversores", "option.audience.students": "Estudiantes", "option.audience.general_public": "Público general", "option.category.transport": "Transporte", "option.category.construction": "Construcción", "option.category.rescue": "Rescate", "option.category.military": "Militar", "option.category.exploration": "Exploración", "option.category.industrial": "Industrial", "option.category.energy": "Energía", "option.category.architecture": "Arquitectura", "option.category.mechanical": "Mecánica", "option.category.water": "Agua", "option.category.flight": "Vuelo", "option.category.space": "Espacio", "option.category.agriculture": "Agricultura", "option.category.medicine": "Medicina", "option.category.robotics": "Robótica"},
-    "pt": {"option.creativity.classic": "Clássico", "option.creativity.bold": "Ousado", "option.creativity.experimental": "Experimental", "option.audience.engineers": "Engenheiros", "option.audience.investors": "Investidores", "option.audience.students": "Estudantes", "option.audience.general_public": "Público geral", "option.category.transport": "Transportes", "option.category.construction": "Construção", "option.category.rescue": "Resgate", "option.category.military": "Militar", "option.category.exploration": "Exploração", "option.category.industrial": "Industrial", "option.category.energy": "Energia", "option.category.architecture": "Arquitetura", "option.category.mechanical": "Mecânica", "option.category.water": "Água", "option.category.flight": "Voo", "option.category.space": "Espaço", "option.category.agriculture": "Agricultura", "option.category.medicine": "Medicina", "option.category.robotics": "Robótica"},
-    "fr": {"option.creativity.classic": "Classique", "option.creativity.bold": "Audacieux", "option.creativity.experimental": "Expérimental", "option.audience.engineers": "Ingénieurs", "option.audience.investors": "Investisseurs", "option.audience.students": "Étudiants", "option.audience.general_public": "Grand public", "option.category.transport": "Transport", "option.category.construction": "Construction", "option.category.rescue": "Secours", "option.category.military": "Militaire", "option.category.exploration": "Exploration", "option.category.industrial": "Industrie", "option.category.energy": "Énergie", "option.category.architecture": "Architecture", "option.category.mechanical": "Mécanique", "option.category.water": "Eau", "option.category.flight": "Vol", "option.category.space": "Espace", "option.category.agriculture": "Agriculture", "option.category.medicine": "Médecine", "option.category.robotics": "Robotique"},
-    "de": {"option.creativity.classic": "Klassisch", "option.creativity.bold": "Mutig", "option.creativity.experimental": "Experimentell", "option.audience.engineers": "Ingenieure", "option.audience.investors": "Investoren", "option.audience.students": "Studierende", "option.audience.general_public": "Allgemeine Öffentlichkeit", "option.category.transport": "Transport", "option.category.construction": "Bauwesen", "option.category.rescue": "Rettung", "option.category.military": "Militär", "option.category.exploration": "Erkundung", "option.category.industrial": "Industrie", "option.category.energy": "Energie", "option.category.architecture": "Architektur", "option.category.mechanical": "Mechanik", "option.category.water": "Wasser", "option.category.flight": "Flug", "option.category.space": "Raumfahrt", "option.category.agriculture": "Landwirtschaft", "option.category.medicine": "Medizin", "option.category.robotics": "Robotik"},
-    "it": {"option.creativity.classic": "Classico", "option.creativity.bold": "Audace", "option.creativity.experimental": "Sperimentale", "option.audience.engineers": "Ingegneri", "option.audience.investors": "Investitori", "option.audience.students": "Studenti", "option.audience.general_public": "Pubblico generale", "option.category.transport": "Trasporti", "option.category.construction": "Costruzioni", "option.category.rescue": "Soccorso", "option.category.military": "Militare", "option.category.exploration": "Esplorazione", "option.category.industrial": "Industria", "option.category.energy": "Energia", "option.category.architecture": "Architettura", "option.category.mechanical": "Meccanica", "option.category.water": "Acqua", "option.category.flight": "Volo", "option.category.space": "Spazio", "option.category.agriculture": "Agricoltura", "option.category.medicine": "Medicina", "option.category.robotics": "Robotica"},
-    "ru": {"option.creativity.classic": "Классический", "option.creativity.bold": "Смелый", "option.creativity.experimental": "Экспериментальный", "option.audience.engineers": "Инженеры", "option.audience.investors": "Инвесторы", "option.audience.students": "Студенты", "option.audience.general_public": "Широкая аудитория", "option.category.transport": "Транспорт", "option.category.construction": "Строительство", "option.category.rescue": "Спасательные системы", "option.category.military": "Военная сфера", "option.category.exploration": "Исследования", "option.category.industrial": "Промышленность", "option.category.energy": "Энергетика", "option.category.architecture": "Архитектура", "option.category.mechanical": "Механика", "option.category.water": "Водные системы", "option.category.flight": "Авиация", "option.category.space": "Космос", "option.category.agriculture": "Сельское хозяйство", "option.category.medicine": "Медицина", "option.category.robotics": "Робототехника"},
-    "sv": {"option.creativity.classic": "Klassisk", "option.creativity.bold": "Djärv", "option.creativity.experimental": "Experimentell", "option.audience.engineers": "Ingenjörer", "option.audience.investors": "Investerare", "option.audience.students": "Studenter", "option.audience.general_public": "Allmänheten", "option.category.transport": "Transport", "option.category.construction": "Bygg", "option.category.rescue": "Räddning", "option.category.military": "Militär", "option.category.exploration": "Utforskning", "option.category.industrial": "Industri", "option.category.energy": "Energi", "option.category.architecture": "Arkitektur", "option.category.mechanical": "Mekanik", "option.category.water": "Vatten", "option.category.flight": "Flyg", "option.category.space": "Rymd", "option.category.agriculture": "Jordbruk", "option.category.medicine": "Medicin", "option.category.robotics": "Robotik"},
-    "fi": {"option.creativity.classic": "Klassinen", "option.creativity.bold": "Rohkea", "option.creativity.experimental": "Kokeellinen", "option.audience.engineers": "Insinöörit", "option.audience.investors": "Sijoittajat", "option.audience.students": "Opiskelijat", "option.audience.general_public": "Suuri yleisö", "option.category.transport": "Liikenne", "option.category.construction": "Rakentaminen", "option.category.rescue": "Pelastus", "option.category.military": "Sotilasala", "option.category.exploration": "Tutkimus", "option.category.industrial": "Teollisuus", "option.category.energy": "Energia", "option.category.architecture": "Arkkitehtuuri", "option.category.mechanical": "Mekaniikka", "option.category.water": "Vesi", "option.category.flight": "Lento", "option.category.space": "Avaruus", "option.category.agriculture": "Maatalous", "option.category.medicine": "Lääketiede", "option.category.robotics": "Robotiikka"},
-    "pl": {"option.creativity.classic": "Klasyczny", "option.creativity.bold": "Odważny", "option.creativity.experimental": "Eksperymentalny", "option.audience.engineers": "Inżynierowie", "option.audience.investors": "Inwestorzy", "option.audience.students": "Studenci", "option.audience.general_public": "Ogół odbiorców", "option.category.transport": "Transport", "option.category.construction": "Budownictwo", "option.category.rescue": "Ratownictwo", "option.category.military": "Wojsko", "option.category.exploration": "Eksploracja", "option.category.industrial": "Przemysł", "option.category.energy": "Energia", "option.category.architecture": "Architektura", "option.category.mechanical": "Mechanika", "option.category.water": "Woda", "option.category.flight": "Lotnictwo", "option.category.space": "Kosmos", "option.category.agriculture": "Rolnictwo", "option.category.medicine": "Medycyna", "option.category.robotics": "Robotyka"},
-    "zh": {"option.creativity.classic": "经典", "option.creativity.bold": "大胆", "option.creativity.experimental": "实验性", "option.audience.engineers": "工程师", "option.audience.investors": "投资者", "option.audience.students": "学生", "option.audience.general_public": "普通公众", "option.category.transport": "交通", "option.category.construction": "建筑施工", "option.category.rescue": "救援", "option.category.military": "军事", "option.category.exploration": "探索", "option.category.industrial": "工业", "option.category.energy": "能源", "option.category.architecture": "建筑", "option.category.mechanical": "机械", "option.category.water": "水务", "option.category.flight": "飞行", "option.category.space": "太空", "option.category.agriculture": "农业", "option.category.medicine": "医疗", "option.category.robotics": "机器人"},
-    "ja": {"option.creativity.classic": "クラシック", "option.creativity.bold": "大胆", "option.creativity.experimental": "実験的", "option.audience.engineers": "エンジニア", "option.audience.investors": "投資家", "option.audience.students": "学生", "option.audience.general_public": "一般", "option.category.transport": "交通", "option.category.construction": "建設", "option.category.rescue": "救助", "option.category.military": "軍事", "option.category.exploration": "探査", "option.category.industrial": "産業", "option.category.energy": "エネルギー", "option.category.architecture": "建築", "option.category.mechanical": "機械", "option.category.water": "水", "option.category.flight": "飛行", "option.category.space": "宇宙", "option.category.agriculture": "農業", "option.category.medicine": "医療", "option.category.robotics": "ロボット工学"},
-    "ko": {"option.creativity.classic": "클래식", "option.creativity.bold": "대담함", "option.creativity.experimental": "실험적", "option.audience.engineers": "엔지니어", "option.audience.investors": "투자자", "option.audience.students": "학생", "option.audience.general_public": "일반 대중", "option.category.transport": "교통", "option.category.construction": "건설", "option.category.rescue": "구조", "option.category.military": "군사", "option.category.exploration": "탐사", "option.category.industrial": "산업", "option.category.energy": "에너지", "option.category.architecture": "건축", "option.category.mechanical": "기계", "option.category.water": "수자원", "option.category.flight": "비행", "option.category.space": "우주", "option.category.agriculture": "농업", "option.category.medicine": "의료", "option.category.robotics": "로봇공학"},
+    "es": {"option.creativity.classic": "Clásico", "option.creativity.bold": "Audaz", "option.creativity.experimental": "Experimental", "option.audience.engineers": "Ingenieros", "option.audience.investors": "Inversores", "option.audience.students": "Estudiantes", "option.audience.general_public": "Público general"},
+    "pt": {"option.creativity.classic": "Clássico", "option.creativity.bold": "Ousado", "option.creativity.experimental": "Experimental", "option.audience.engineers": "Engenheiros", "option.audience.investors": "Investidores", "option.audience.students": "Estudantes", "option.audience.general_public": "Público geral"},
+    "fr": {"option.creativity.classic": "Classique", "option.creativity.bold": "Audacieux", "option.creativity.experimental": "Expérimental", "option.audience.engineers": "Ingénieurs", "option.audience.investors": "Investisseurs", "option.audience.students": "Étudiants", "option.audience.general_public": "Grand public"},
+    "de": {"option.creativity.classic": "Klassisch", "option.creativity.bold": "Mutig", "option.creativity.experimental": "Experimentell", "option.audience.engineers": "Ingenieure", "option.audience.investors": "Investoren", "option.audience.students": "Studierende", "option.audience.general_public": "Allgemeine Öffentlichkeit"},
+    "it": {"option.creativity.classic": "Classico", "option.creativity.bold": "Audace", "option.creativity.experimental": "Sperimentale", "option.audience.engineers": "Ingegneri", "option.audience.investors": "Investitori", "option.audience.students": "Studenti", "option.audience.general_public": "Pubblico generale"},
+    "ru": {"option.creativity.classic": "Классический", "option.creativity.bold": "Смелый", "option.creativity.experimental": "Экспериментальный", "option.audience.engineers": "Инженеры", "option.audience.investors": "Инвесторы", "option.audience.students": "Студенты", "option.audience.general_public": "Широкая аудитория"},
+    "sv": {"option.creativity.classic": "Klassisk", "option.creativity.bold": "Djärv", "option.creativity.experimental": "Experimentell", "option.audience.engineers": "Ingenjörer", "option.audience.investors": "Investerare", "option.audience.students": "Studenter", "option.audience.general_public": "Allmänheten"},
+    "fi": {"option.creativity.classic": "Klassinen", "option.creativity.bold": "Rohkea", "option.creativity.experimental": "Kokeellinen", "option.audience.engineers": "Insinöörit", "option.audience.investors": "Sijoittajat", "option.audience.students": "Opiskelijat", "option.audience.general_public": "Suuri yleisö"},
+    "pl": {"option.creativity.classic": "Klasyczny", "option.creativity.bold": "Odważny", "option.creativity.experimental": "Eksperymentalny", "option.audience.engineers": "Inżynierowie", "option.audience.investors": "Inwestorzy", "option.audience.students": "Studenci", "option.audience.general_public": "Ogół odbiorców"},
+    "zh": {"option.creativity.classic": "经典", "option.creativity.bold": "大胆", "option.creativity.experimental": "实验性", "option.audience.engineers": "工程师", "option.audience.investors": "投资者", "option.audience.students": "学生", "option.audience.general_public": "普通公众"},
+    "ja": {"option.creativity.classic": "クラシック", "option.creativity.bold": "大胆", "option.creativity.experimental": "実験的", "option.audience.engineers": "エンジニア", "option.audience.investors": "投資家", "option.audience.students": "学生", "option.audience.general_public": "一般"},
+    "ko": {"option.creativity.classic": "클래식", "option.creativity.bold": "대담함", "option.creativity.experimental": "실험적", "option.audience.engineers": "엔지니어", "option.audience.investors": "투자자", "option.audience.students": "학생", "option.audience.general_public": "일반 대중"},
 }
 
 
@@ -545,6 +550,122 @@ _HOME_DESCRIPTION_TRANSLATIONS = {
 }
 
 
+_SIDEBAR_SETTING_TRANSLATIONS = {
+    "es": {"sidebar.generate_images": "Generar imágenes"},
+    "pt": {"sidebar.generate_images": "Gerar imagens"},
+    "fr": {"sidebar.generate_images": "Générer des images"},
+    "de": {"sidebar.generate_images": "Bilder generieren"},
+    "it": {"sidebar.generate_images": "Genera immagini"},
+    "ru": {"sidebar.generate_images": "Создавать изображения"},
+    "sv": {"sidebar.generate_images": "Generera bilder"},
+    "fi": {"sidebar.generate_images": "Luo kuvat"},
+    "pl": {"sidebar.generate_images": "Generuj obrazy"},
+    "zh": {"sidebar.generate_images": "生成图像"},
+    "ja": {"sidebar.generate_images": "画像を生成"},
+    "ko": {"sidebar.generate_images": "이미지 생성"},
+}
+
+
+_MARKETPLACE_TRANSLATIONS = {
+    "es": {
+        "nav.marketplace": "Mercado",
+        "marketplace.title": "Mercado de inversión",
+        "marketplace.subtitle": "Descubre proyectos. Conecta ideas con capital.",
+        "marketplace.search": "Buscar proyectos...", "marketplace.filters": "Filtros", "marketplace.categories": "Categorías de proyectos",
+        "marketplace.category.all": "Todos",
+        "marketplace.stage": "Etapa", "marketplace.funding": "Financiación / Busca", "marketplace.view_project": "Ver proyecto", "marketplace.no_projects": "Ningún proyecto coincide con estos filtros.",
+    },
+    "pt": {
+        "nav.marketplace": "Mercado",
+        "marketplace.title": "Mercado de investidores",
+        "marketplace.subtitle": "Descubra projetos. Ligue ideias a capital.",
+        "marketplace.search": "Pesquisar projetos...", "marketplace.filters": "Filtros", "marketplace.categories": "Categorias de projetos",
+        "marketplace.category.all": "Todos",
+        "marketplace.stage": "Fase", "marketplace.funding": "Financiamento / Procura", "marketplace.view_project": "Ver projeto", "marketplace.no_projects": "Nenhum projeto corresponde a estes filtros.",
+    },
+    "fr": {
+        "nav.marketplace": "Marché",
+        "marketplace.title": "Marché des investisseurs",
+        "marketplace.subtitle": "Découvrez des projets. Reliez les idées au capital.",
+        "marketplace.search": "Rechercher des projets...", "marketplace.filters": "Filtres", "marketplace.categories": "Catégories de projets",
+        "marketplace.category.all": "Tous",
+        "marketplace.stage": "Étape", "marketplace.funding": "Financement / Recherche", "marketplace.view_project": "Voir le projet", "marketplace.no_projects": "Aucun projet ne correspond à ces filtres.",
+    },
+    "de": {
+        "nav.marketplace": "Marktplatz",
+        "marketplace.title": "Investoren-Marktplatz",
+        "marketplace.subtitle": "Projekte entdecken. Ideen mit Kapital verbinden.",
+        "marketplace.search": "Projekte suchen...", "marketplace.filters": "Filter", "marketplace.categories": "Projektkategorien",
+        "marketplace.category.all": "Alle",
+        "marketplace.stage": "Phase", "marketplace.funding": "Finanzierung / Gesucht", "marketplace.view_project": "Projekt ansehen", "marketplace.no_projects": "Keine Projekte entsprechen diesen Filtern.",
+    },
+    "it": {
+        "nav.marketplace": "Mercato",
+        "marketplace.title": "Mercato degli investitori",
+        "marketplace.subtitle": "Scopri progetti. Collega idee e capitale.",
+        "marketplace.search": "Cerca progetti...", "marketplace.filters": "Filtri", "marketplace.categories": "Categorie di progetto",
+        "marketplace.category.all": "Tutti",
+        "marketplace.stage": "Fase", "marketplace.funding": "Finanziamento / Ricerca", "marketplace.view_project": "Vedi progetto", "marketplace.no_projects": "Nessun progetto corrisponde a questi filtri.",
+    },
+    "ru": {
+        "nav.marketplace": "Маркетплейс",
+        "marketplace.title": "Маркетплейс для инвесторов",
+        "marketplace.subtitle": "Открывайте проекты. Соединяйте идеи с капиталом.",
+        "marketplace.search": "Поиск проектов...", "marketplace.filters": "Фильтры", "marketplace.categories": "Категории проектов",
+        "marketplace.category.all": "Все",
+        "marketplace.stage": "Стадия", "marketplace.funding": "Финансирование / Поиск", "marketplace.view_project": "Открыть проект", "marketplace.no_projects": "Проекты по этим фильтрам не найдены.",
+    },
+    "sv": {
+        "nav.marketplace": "Marknadsplats",
+        "marketplace.title": "Investerarmarknad",
+        "marketplace.subtitle": "Upptäck projekt. Koppla idéer till kapital.",
+        "marketplace.search": "Sök projekt...", "marketplace.filters": "Filter", "marketplace.categories": "Projektkategorier",
+        "marketplace.category.all": "Alla",
+        "marketplace.stage": "Fas", "marketplace.funding": "Finansiering / Söker", "marketplace.view_project": "Visa projekt", "marketplace.no_projects": "Inga projekt matchar dessa filter.",
+    },
+    "fi": {
+        "nav.marketplace": "Markkinapaikka",
+        "marketplace.title": "Sijoittajamarkkinapaikka",
+        "marketplace.subtitle": "Löydä projekteja. Yhdistä ideat pääomaan.",
+        "marketplace.search": "Hae projekteja...", "marketplace.filters": "Suodattimet", "marketplace.categories": "Projektikategoriat",
+        "marketplace.category.all": "Kaikki",
+        "marketplace.stage": "Vaihe", "marketplace.funding": "Rahoitus / Hakee", "marketplace.view_project": "Näytä projekti", "marketplace.no_projects": "Näillä suodattimilla ei löytynyt projekteja.",
+    },
+    "pl": {
+        "nav.marketplace": "Rynek",
+        "marketplace.title": "Rynek inwestorski",
+        "marketplace.subtitle": "Odkrywaj projekty. Łącz pomysły z kapitałem.",
+        "marketplace.search": "Szukaj projektów...", "marketplace.filters": "Filtry", "marketplace.categories": "Kategorie projektów",
+        "marketplace.category.all": "Wszystkie",
+        "marketplace.stage": "Etap", "marketplace.funding": "Finansowanie / Poszukuje", "marketplace.view_project": "Zobacz projekt", "marketplace.no_projects": "Brak projektów pasujących do filtrów.",
+    },
+    "zh": {
+        "nav.marketplace": "项目市场",
+        "marketplace.title": "投资者项目市场",
+        "marketplace.subtitle": "发现项目，让创意连接资本。",
+        "marketplace.search": "搜索项目...", "marketplace.filters": "筛选", "marketplace.categories": "项目类别",
+        "marketplace.category.all": "全部",
+        "marketplace.stage": "阶段", "marketplace.funding": "融资 / 寻求", "marketplace.view_project": "查看项目", "marketplace.no_projects": "没有符合筛选条件的项目。",
+    },
+    "ja": {
+        "nav.marketplace": "マーケット",
+        "marketplace.title": "投資家マーケットプレイス",
+        "marketplace.subtitle": "プロジェクトを発見し、アイデアと資本をつなぎます。",
+        "marketplace.search": "プロジェクトを検索...", "marketplace.filters": "フィルター", "marketplace.categories": "プロジェクトカテゴリ",
+        "marketplace.category.all": "すべて",
+        "marketplace.stage": "段階", "marketplace.funding": "資金調達 / 募集中", "marketplace.view_project": "プロジェクトを見る", "marketplace.no_projects": "条件に一致するプロジェクトはありません。",
+    },
+    "ko": {
+        "nav.marketplace": "마켓플레이스",
+        "marketplace.title": "투자자 마켓플레이스",
+        "marketplace.subtitle": "프로젝트를 발견하고 아이디어와 자본을 연결하세요.",
+        "marketplace.search": "프로젝트 검색...", "marketplace.filters": "필터", "marketplace.categories": "프로젝트 카테고리",
+        "marketplace.category.all": "전체",
+        "marketplace.stage": "단계", "marketplace.funding": "자금 / 모집", "marketplace.view_project": "프로젝트 보기", "marketplace.no_projects": "필터와 일치하는 프로젝트가 없습니다.",
+    },
+}
+
+
 _TRANSLATION_ALIASES = {
     "home.feature.title_summary.title": "concept.executive_summary",
     "home.feature.sketch.title": "concept.sketch_description",
@@ -562,11 +683,21 @@ _TRANSLATION_ALIASES = {
 
 TRANSLATIONS = {}
 for code in LANGUAGES:
+    category_catalog = {
+        category_translation_key(category_key): display_name
+        for category_key, display_name in zip(
+            CATEGORY_KEYS,
+            CATEGORY_TRANSLATIONS[code],
+        )
+    }
     catalog = {
         **_ENGLISH,
         **_CORE_TRANSLATIONS.get(code, {}),
         **_OPTION_TRANSLATIONS.get(code, {}),
         **_HOME_DESCRIPTION_TRANSLATIONS.get(code, {}),
+        **_SIDEBAR_SETTING_TRANSLATIONS.get(code, {}),
+        **_MARKETPLACE_TRANSLATIONS.get(code, {}),
+        **category_catalog,
     }
     if code != DEFAULT_LANGUAGE:
         for target_key, source_key in _TRANSLATION_ALIASES.items():
@@ -583,6 +714,14 @@ def translate(key, language=DEFAULT_LANGUAGE, **values):
     language = normalize_language(language)
     text = TRANSLATIONS.get(language, {}).get(key, _ENGLISH.get(key, key))
     return text.format(**values) if values else text
+
+
+def category_display_name(category, language=DEFAULT_LANGUAGE):
+    """Translate canonical or mapped legacy categories without inventing IDs."""
+    category_key = normalize_category(category)
+    if category_key is None:
+        return " ".join(str(category or "").split())
+    return translate(category_translation_key(category_key), language)
 
 
 def language_display_name(language):

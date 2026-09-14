@@ -15,11 +15,10 @@ from ui.state import BLUEPRINT_ASSET, LEONARDO_ASSET, get_current_concept_id, ge
 _SAVED_IMAGES_ICON = """<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="5" width="16" height="14" rx="2"/><path d="M5 16l4-4 3 3 3-3 6 6"/><circle cx="16.5" cy="9.5" r="1.5"/><path d="M3 17V5a2 2 0 0 1 2-2h14"/></svg>"""
 
 
-def render_generated_visuals():
+def render_generated_visuals(language):
     if not st.session_state[LEONARDO_ASSET] and not st.session_state[BLUEPRINT_ASSET]:
         return
 
-    language = get_current_language()
     st.markdown(f"## {translate('images.generated_assets', language)}")
 
     if st.session_state[LEONARDO_ASSET]:
