@@ -203,6 +203,19 @@ _ENGLISH = {
     "marketplace.funding": "Funding / Seeking",
     "marketplace.view_project": "View Project",
     "marketplace.no_projects": "No projects match these filters.",
+    "marketplace.back": "Back to Marketplace",
+    "marketplace.previous_image": "Previous image",
+    "marketplace.next_image": "Next image",
+    "marketplace.detail.overview": "Overview",
+    "marketplace.detail.investment_highlights": "Investment Highlights",
+    "marketplace.detail.market_opportunity": "Market Opportunity",
+    "marketplace.detail.technology_solution": "Technology / Solution",
+    "marketplace.detail.roadmap": "Roadmap",
+    "marketplace.detail.risks": "Risks",
+    "marketplace.detail.commercial_outlook": "Commercial Outlook",
+    "marketplace.publish": "Publish to Marketplace",
+    "marketplace.published": "Published",
+    "marketplace.remove": "Remove from Marketplace",
     "asset.not_found": "Required image could not be loaded.",
     "option.creativity.classic": "Classic",
     "option.creativity.bold": "Bold",
@@ -574,6 +587,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Buscar proyectos...", "marketplace.filters": "Filtros", "marketplace.categories": "Categorías de proyectos",
         "marketplace.category.all": "Todos",
         "marketplace.stage": "Etapa", "marketplace.funding": "Financiación / Busca", "marketplace.view_project": "Ver proyecto", "marketplace.no_projects": "Ningún proyecto coincide con estos filtros.",
+        "marketplace.back": "Volver al mercado", "marketplace.previous_image": "Imagen anterior", "marketplace.next_image": "Imagen siguiente",
+        "marketplace.detail.overview": "Resumen general", "marketplace.detail.investment_highlights": "Aspectos destacados de inversión", "marketplace.detail.market_opportunity": "Oportunidad de mercado", "marketplace.detail.technology_solution": "Tecnología / Solución", "marketplace.detail.roadmap": "Hoja de ruta", "marketplace.detail.risks": "Riesgos", "marketplace.detail.commercial_outlook": "Perspectivas comerciales",
     },
     "pt": {
         "nav.marketplace": "Mercado",
@@ -582,6 +597,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Pesquisar projetos...", "marketplace.filters": "Filtros", "marketplace.categories": "Categorias de projetos",
         "marketplace.category.all": "Todos",
         "marketplace.stage": "Fase", "marketplace.funding": "Financiamento / Procura", "marketplace.view_project": "Ver projeto", "marketplace.no_projects": "Nenhum projeto corresponde a estes filtros.",
+        "marketplace.back": "Voltar ao mercado", "marketplace.previous_image": "Imagem anterior", "marketplace.next_image": "Imagem seguinte",
+        "marketplace.detail.overview": "Visão geral", "marketplace.detail.investment_highlights": "Destaques do investimento", "marketplace.detail.market_opportunity": "Oportunidade de mercado", "marketplace.detail.technology_solution": "Tecnologia / Solução", "marketplace.detail.roadmap": "Roteiro", "marketplace.detail.risks": "Riscos", "marketplace.detail.commercial_outlook": "Perspetivas comerciais",
     },
     "fr": {
         "nav.marketplace": "Marché",
@@ -590,6 +607,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Rechercher des projets...", "marketplace.filters": "Filtres", "marketplace.categories": "Catégories de projets",
         "marketplace.category.all": "Tous",
         "marketplace.stage": "Étape", "marketplace.funding": "Financement / Recherche", "marketplace.view_project": "Voir le projet", "marketplace.no_projects": "Aucun projet ne correspond à ces filtres.",
+        "marketplace.back": "Retour au marché", "marketplace.previous_image": "Image précédente", "marketplace.next_image": "Image suivante",
+        "marketplace.detail.overview": "Vue d’ensemble", "marketplace.detail.investment_highlights": "Points forts de l’investissement", "marketplace.detail.market_opportunity": "Opportunité de marché", "marketplace.detail.technology_solution": "Technologie / Solution", "marketplace.detail.roadmap": "Feuille de route", "marketplace.detail.risks": "Risques", "marketplace.detail.commercial_outlook": "Perspectives commerciales",
     },
     "de": {
         "nav.marketplace": "Marktplatz",
@@ -598,6 +617,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Projekte suchen...", "marketplace.filters": "Filter", "marketplace.categories": "Projektkategorien",
         "marketplace.category.all": "Alle",
         "marketplace.stage": "Phase", "marketplace.funding": "Finanzierung / Gesucht", "marketplace.view_project": "Projekt ansehen", "marketplace.no_projects": "Keine Projekte entsprechen diesen Filtern.",
+        "marketplace.back": "Zurück zum Marktplatz", "marketplace.previous_image": "Vorheriges Bild", "marketplace.next_image": "Nächstes Bild",
+        "marketplace.detail.overview": "Überblick", "marketplace.detail.investment_highlights": "Investitionsvorteile", "marketplace.detail.market_opportunity": "Marktchance", "marketplace.detail.technology_solution": "Technologie / Lösung", "marketplace.detail.roadmap": "Roadmap", "marketplace.detail.risks": "Risiken", "marketplace.detail.commercial_outlook": "Geschäftsausblick",
     },
     "it": {
         "nav.marketplace": "Mercato",
@@ -606,6 +627,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Cerca progetti...", "marketplace.filters": "Filtri", "marketplace.categories": "Categorie di progetto",
         "marketplace.category.all": "Tutti",
         "marketplace.stage": "Fase", "marketplace.funding": "Finanziamento / Ricerca", "marketplace.view_project": "Vedi progetto", "marketplace.no_projects": "Nessun progetto corrisponde a questi filtri.",
+        "marketplace.back": "Torna al mercato", "marketplace.previous_image": "Immagine precedente", "marketplace.next_image": "Immagine successiva",
+        "marketplace.detail.overview": "Panoramica", "marketplace.detail.investment_highlights": "Punti di forza dell’investimento", "marketplace.detail.market_opportunity": "Opportunità di mercato", "marketplace.detail.technology_solution": "Tecnologia / Soluzione", "marketplace.detail.roadmap": "Percorso di sviluppo", "marketplace.detail.risks": "Rischi", "marketplace.detail.commercial_outlook": "Prospettive commerciali",
     },
     "ru": {
         "nav.marketplace": "Маркетплейс",
@@ -614,6 +637,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Поиск проектов...", "marketplace.filters": "Фильтры", "marketplace.categories": "Категории проектов",
         "marketplace.category.all": "Все",
         "marketplace.stage": "Стадия", "marketplace.funding": "Финансирование / Поиск", "marketplace.view_project": "Открыть проект", "marketplace.no_projects": "Проекты по этим фильтрам не найдены.",
+        "marketplace.back": "Назад в маркетплейс", "marketplace.previous_image": "Предыдущее изображение", "marketplace.next_image": "Следующее изображение",
+        "marketplace.detail.overview": "Обзор", "marketplace.detail.investment_highlights": "Инвестиционные преимущества", "marketplace.detail.market_opportunity": "Рыночные возможности", "marketplace.detail.technology_solution": "Технология / Решение", "marketplace.detail.roadmap": "Дорожная карта", "marketplace.detail.risks": "Риски", "marketplace.detail.commercial_outlook": "Коммерческие перспективы",
     },
     "sv": {
         "nav.marketplace": "Marknadsplats",
@@ -622,6 +647,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Sök projekt...", "marketplace.filters": "Filter", "marketplace.categories": "Projektkategorier",
         "marketplace.category.all": "Alla",
         "marketplace.stage": "Fas", "marketplace.funding": "Finansiering / Söker", "marketplace.view_project": "Visa projekt", "marketplace.no_projects": "Inga projekt matchar dessa filter.",
+        "marketplace.back": "Tillbaka till marknadsplatsen", "marketplace.previous_image": "Föregående bild", "marketplace.next_image": "Nästa bild",
+        "marketplace.detail.overview": "Översikt", "marketplace.detail.investment_highlights": "Investeringshöjdpunkter", "marketplace.detail.market_opportunity": "Marknadsmöjlighet", "marketplace.detail.technology_solution": "Teknik / Lösning", "marketplace.detail.roadmap": "Färdplan", "marketplace.detail.risks": "Risker", "marketplace.detail.commercial_outlook": "Kommersiella utsikter",
     },
     "fi": {
         "nav.marketplace": "Markkinapaikka",
@@ -630,6 +657,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Hae projekteja...", "marketplace.filters": "Suodattimet", "marketplace.categories": "Projektikategoriat",
         "marketplace.category.all": "Kaikki",
         "marketplace.stage": "Vaihe", "marketplace.funding": "Rahoitus / Hakee", "marketplace.view_project": "Näytä projekti", "marketplace.no_projects": "Näillä suodattimilla ei löytynyt projekteja.",
+        "marketplace.back": "Takaisin markkinapaikalle", "marketplace.previous_image": "Edellinen kuva", "marketplace.next_image": "Seuraava kuva",
+        "marketplace.detail.overview": "Yleiskatsaus", "marketplace.detail.investment_highlights": "Sijoituskohteen vahvuudet", "marketplace.detail.market_opportunity": "Markkinamahdollisuus", "marketplace.detail.technology_solution": "Teknologia / Ratkaisu", "marketplace.detail.roadmap": "Etenemissuunnitelma", "marketplace.detail.risks": "Riskit", "marketplace.detail.commercial_outlook": "Kaupalliset näkymät",
     },
     "pl": {
         "nav.marketplace": "Rynek",
@@ -638,6 +667,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "Szukaj projektów...", "marketplace.filters": "Filtry", "marketplace.categories": "Kategorie projektów",
         "marketplace.category.all": "Wszystkie",
         "marketplace.stage": "Etap", "marketplace.funding": "Finansowanie / Poszukuje", "marketplace.view_project": "Zobacz projekt", "marketplace.no_projects": "Brak projektów pasujących do filtrów.",
+        "marketplace.back": "Wróć do rynku", "marketplace.previous_image": "Poprzedni obraz", "marketplace.next_image": "Następny obraz",
+        "marketplace.detail.overview": "Przegląd", "marketplace.detail.investment_highlights": "Najważniejsze atuty inwestycyjne", "marketplace.detail.market_opportunity": "Szansa rynkowa", "marketplace.detail.technology_solution": "Technologia / Rozwiązanie", "marketplace.detail.roadmap": "Plan rozwoju", "marketplace.detail.risks": "Ryzyka", "marketplace.detail.commercial_outlook": "Perspektywy komercyjne",
     },
     "zh": {
         "nav.marketplace": "项目市场",
@@ -646,6 +677,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "搜索项目...", "marketplace.filters": "筛选", "marketplace.categories": "项目类别",
         "marketplace.category.all": "全部",
         "marketplace.stage": "阶段", "marketplace.funding": "融资 / 寻求", "marketplace.view_project": "查看项目", "marketplace.no_projects": "没有符合筛选条件的项目。",
+        "marketplace.back": "返回项目市场", "marketplace.previous_image": "上一张图片", "marketplace.next_image": "下一张图片",
+        "marketplace.detail.overview": "项目概览", "marketplace.detail.investment_highlights": "投资亮点", "marketplace.detail.market_opportunity": "市场机会", "marketplace.detail.technology_solution": "技术 / 解决方案", "marketplace.detail.roadmap": "发展路线图", "marketplace.detail.risks": "风险", "marketplace.detail.commercial_outlook": "商业前景",
     },
     "ja": {
         "nav.marketplace": "マーケット",
@@ -654,6 +687,8 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "プロジェクトを検索...", "marketplace.filters": "フィルター", "marketplace.categories": "プロジェクトカテゴリ",
         "marketplace.category.all": "すべて",
         "marketplace.stage": "段階", "marketplace.funding": "資金調達 / 募集中", "marketplace.view_project": "プロジェクトを見る", "marketplace.no_projects": "条件に一致するプロジェクトはありません。",
+        "marketplace.back": "マーケットに戻る", "marketplace.previous_image": "前の画像", "marketplace.next_image": "次の画像",
+        "marketplace.detail.overview": "概要", "marketplace.detail.investment_highlights": "投資ハイライト", "marketplace.detail.market_opportunity": "市場機会", "marketplace.detail.technology_solution": "技術 / ソリューション", "marketplace.detail.roadmap": "ロードマップ", "marketplace.detail.risks": "リスク", "marketplace.detail.commercial_outlook": "商業的展望",
     },
     "ko": {
         "nav.marketplace": "마켓플레이스",
@@ -662,6 +697,72 @@ _MARKETPLACE_TRANSLATIONS = {
         "marketplace.search": "프로젝트 검색...", "marketplace.filters": "필터", "marketplace.categories": "프로젝트 카테고리",
         "marketplace.category.all": "전체",
         "marketplace.stage": "단계", "marketplace.funding": "자금 / 모집", "marketplace.view_project": "프로젝트 보기", "marketplace.no_projects": "필터와 일치하는 프로젝트가 없습니다.",
+        "marketplace.back": "마켓플레이스로 돌아가기", "marketplace.previous_image": "이전 이미지", "marketplace.next_image": "다음 이미지",
+        "marketplace.detail.overview": "개요", "marketplace.detail.investment_highlights": "투자 핵심 사항", "marketplace.detail.market_opportunity": "시장 기회", "marketplace.detail.technology_solution": "기술 / 솔루션", "marketplace.detail.roadmap": "로드맵", "marketplace.detail.risks": "위험", "marketplace.detail.commercial_outlook": "상업적 전망",
+    },
+}
+
+
+_MARKETPLACE_PUBLICATION_TRANSLATIONS = {
+    "es": {
+        "marketplace.publish": "Publicar en el mercado",
+        "marketplace.published": "Publicado",
+        "marketplace.remove": "Retirar del mercado",
+    },
+    "pt": {
+        "marketplace.publish": "Publicar no mercado",
+        "marketplace.published": "Publicado",
+        "marketplace.remove": "Remover do mercado",
+    },
+    "fr": {
+        "marketplace.publish": "Publier sur le marché",
+        "marketplace.published": "Publié",
+        "marketplace.remove": "Retirer du marché",
+    },
+    "de": {
+        "marketplace.publish": "Auf dem Marktplatz veröffentlichen",
+        "marketplace.published": "Veröffentlicht",
+        "marketplace.remove": "Vom Marktplatz entfernen",
+    },
+    "it": {
+        "marketplace.publish": "Pubblica nel mercato",
+        "marketplace.published": "Pubblicato",
+        "marketplace.remove": "Rimuovi dal mercato",
+    },
+    "ru": {
+        "marketplace.publish": "Опубликовать в маркетплейсе",
+        "marketplace.published": "Опубликовано",
+        "marketplace.remove": "Удалить из маркетплейса",
+    },
+    "sv": {
+        "marketplace.publish": "Publicera på marknadsplatsen",
+        "marketplace.published": "Publicerad",
+        "marketplace.remove": "Ta bort från marknadsplatsen",
+    },
+    "fi": {
+        "marketplace.publish": "Julkaise markkinapaikalla",
+        "marketplace.published": "Julkaistu",
+        "marketplace.remove": "Poista markkinapaikalta",
+    },
+    "pl": {
+        "marketplace.publish": "Opublikuj na rynku",
+        "marketplace.published": "Opublikowano",
+        "marketplace.remove": "Usuń z rynku",
+    },
+    "zh": {
+        "marketplace.publish": "发布到项目市场",
+        "marketplace.published": "已发布",
+        "marketplace.remove": "从项目市场移除",
+    },
+    "ja": {
+        "marketplace.publish": "マーケットに公開",
+        "marketplace.published": "公開済み",
+        "marketplace.remove": "マーケットから削除",
+    },
+    "ko": {
+        "marketplace.publish": "마켓플레이스에 게시",
+        "marketplace.published": "게시됨",
+        "marketplace.remove": "마켓플레이스에서 제거",
     },
 }
 
@@ -697,6 +798,7 @@ for code in LANGUAGES:
         **_HOME_DESCRIPTION_TRANSLATIONS.get(code, {}),
         **_SIDEBAR_SETTING_TRANSLATIONS.get(code, {}),
         **_MARKETPLACE_TRANSLATIONS.get(code, {}),
+        **_MARKETPLACE_PUBLICATION_TRANSLATIONS.get(code, {}),
         **category_catalog,
     }
     if code != DEFAULT_LANGUAGE:

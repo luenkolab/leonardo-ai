@@ -55,6 +55,11 @@ def init_db():
         cursor.execute("ALTER TABLE concepts ADD COLUMN is_favorite INTEGER DEFAULT 0")
     if "concept_language" not in concept_columns:
         cursor.execute("ALTER TABLE concepts ADD COLUMN concept_language TEXT")
+    if "is_published" not in concept_columns:
+        cursor.execute(
+            "ALTER TABLE concepts "
+            "ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0"
+        )
 
     migrate_legacy_concept_categories(cursor)
 
@@ -213,6 +218,66 @@ def get_concept_prompt(concept_id):
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
+
+
+def set_concept_published(concept_id, is_published):
+    """Set Marketplace publication state without copying concept content."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE concepts SET is_published = ? WHERE id = ?",
+        (1 if is_published else 0, concept_id),
+    )
+    changed = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return changed
+
+
+def is_concept_published(concept_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT is_published FROM concepts WHERE id = ?",
+        (concept_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return bool(row[0]) if row else False
+
+
+def get_published_concepts():
+    """Return only explicitly published concepts for Marketplace mapping."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, title, category, concept_json, concept_language, created_at
+        FROM concepts
+        WHERE is_published = 1
+        ORDER BY created_at DESC, id DESC
+        """
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return rows
+
+
+def get_published_concept_by_id(concept_id):
+    """Return one published concept row, or None when absent/unpublished."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, title, category, concept_json, concept_language, created_at
+        FROM concepts
+        WHERE id = ? AND is_published = 1
+        """,
+        (concept_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
 
 
 def get_concept_translation(concept_id, language_code):

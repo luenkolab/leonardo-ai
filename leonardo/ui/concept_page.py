@@ -19,6 +19,11 @@ from application.images import (
     generate_leonardo_visual,
     get_concept_image_slots,
 )
+from application.marketplace import (
+    concept_is_published,
+    publish_concept,
+    remove_concept_from_marketplace,
+)
 from application.project_export import export_project_package
 from ui.components import (
     render_complete_guide,
@@ -418,6 +423,34 @@ def _render_pdf_export(concept_data, title, language):
             )
 
 
+def _render_marketplace_publication(concept_id, concept_data, title, language):
+    with st.container(
+        key="marketplace_publication_action",
+        horizontal=True,
+        vertical_alignment="center",
+        gap="small",
+    ):
+        _render_pdf_export(concept_data, title, language)
+        st.space("stretch")
+        if concept_is_published(concept_id):
+            st.caption(
+                translate("marketplace.published", language),
+                width="content",
+            )
+            if st.button(
+                translate("marketplace.remove", language),
+                key="remove_current_concept_from_marketplace",
+            ):
+                remove_concept_from_marketplace(concept_id)
+                st.rerun()
+        elif st.button(
+            translate("marketplace.publish", language),
+            key="publish_current_concept_to_marketplace",
+        ):
+            publish_concept(concept_id)
+            st.rerun()
+
+
 def _run_pending_automatic_image_generation(concept_data, concept_id):
     if not get_generate_images_enabled():
         clear_automatic_image_generation_state()
@@ -499,7 +532,15 @@ def render_concept_result(concept_data):
     _render_commercial_outlook(concept_data, viewer_language)
     render_voice_assistant(concept_data, viewer_language)
     _render_delivery_metrics(concept_data, viewer_language)
-    _render_pdf_export(concept_data, title, viewer_language)
+    if current_concept_id is not None:
+        _render_marketplace_publication(
+            current_concept_id,
+            concept_data,
+            title,
+            viewer_language,
+        )
+    else:
+        _render_pdf_export(concept_data, title, viewer_language)
     if current_concept_id is not None:
         _run_pending_automatic_image_generation(
             original_concept_data,
