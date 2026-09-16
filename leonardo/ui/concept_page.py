@@ -15,8 +15,6 @@ from application.images import (
     LEONARDO_CONCEPT_IMAGE_TYPES,
     MODERN_CONCEPT_IMAGE_TYPES,
     generate_and_save_concept_images,
-    generate_blueprint_visual,
-    generate_leonardo_visual,
     get_concept_image_slots,
 )
 from application.marketplace import (
@@ -30,12 +28,8 @@ from ui.components import (
     render_generated_section_heading,
     render_result_box,
 )
-from ui.images import render_generated_visuals
 from ui.state import (
-    BLUEPRINT_ASSET,
-    LEONARDO_ASSET,
     clear_automatic_image_generation_state,
-    clear_transient_visuals,
     finish_automatic_image_generation,
     get_automatic_image_errors,
     get_automatic_image_pending_concept_id,
@@ -44,6 +38,7 @@ from ui.state import (
     get_current_language,
     get_generate_images_enabled,
     set_current_concept,
+    set_current_page,
     start_automatic_image_generation,
 )
 from ui.voice import render_voice_assistant
@@ -106,7 +101,6 @@ def generate_or_load_concept(
 
     if generate or regenerate:
 
-        clear_transient_visuals()
         ui_language = get_current_language()
 
         prompt_text = (
@@ -273,63 +267,31 @@ def _render_modern_implementation(
         render_result_box(translate("concept.system_components", language), concept_data["system_components"], icon_svg=_MODERN_RESULT_ICONS["system_components"])
         render_result_box(translate("concept.materials", language), concept_data["materials"], icon_svg=_MODERN_RESULT_ICONS["materials"])
         render_result_box(translate("concept.technical_requirements", language), concept_data["technical_requirements"], icon_svg=_MODERN_RESULT_ICONS["technical_requirements"])
-        render_result_box(translate("concept.modern_sketch_description", language), concept_data["modern_sketch_description"], icon_svg=_MODERN_RESULT_ICONS["modern_sketch_description"])
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _render_visual_generation(concept_data, language):
+def _render_engineering_drawing_studio(language):
     render_generated_section_heading(
-        translate("concept.visual_generation", language),
+        translate("concept.engineering_drawing_studio", language),
         _GENERATED_SECTION_ICONS["visual"],
     )
-    render_result_box(
-        translate("concept.leonardo_prompt", language),
-        concept_data["leonardo_sketch_description"],
-        icon_svg=_GENERATED_RESULT_ICONS["leonardo_prompt"],
-        visual_variant="blue",
+    st.markdown(
+        f"""
+<div class="result-title" style="margin-bottom: 1.25rem;">
+    <span class="result-title-icon">{_GENERATED_RESULT_ICONS["blueprint_prompt"]}</span>
+    {html.escape(translate("concept.engineering_drawing_studio_description", language))}
+</div>
+""",
+        unsafe_allow_html=True,
     )
-    render_result_box(
-        translate("concept.blueprint_prompt", language),
-        concept_data["modern_sketch_description"],
-        extra_bottom_spacing=True,
-        icon_svg=_GENERATED_RESULT_ICONS["blueprint_prompt"],
-        visual_variant="blue",
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        generate_leonardo_image = st.button(
-            translate("concept.generate_leonardo", language),
-            key="generate_leonardo_manual",
-            use_container_width=True,
-        )
-    with col2:
-        generate_blueprint_image = st.button(
-            translate("concept.generate_blueprint", language),
-            key="generate_blueprint_manual",
-            use_container_width=True,
-        )
-
-    if generate_leonardo_image and get_generate_images_enabled():
-        with st.spinner(translate("concept.generating_leonardo", language)):
-            try:
-                st.session_state[LEONARDO_ASSET] = generate_leonardo_visual(
-                    concept_data["leonardo_sketch_description"]
-                )
-            except Exception as e:
-                st.error(translate("concept.leonardo_error", language, error=e))
-
-    if generate_blueprint_image and get_generate_images_enabled():
-        with st.spinner(translate("concept.generating_blueprint", language)):
-            try:
-                st.session_state[BLUEPRINT_ASSET] = generate_blueprint_visual(
-                    concept_data["modern_sketch_description"]
-                )
-            except Exception as e:
-                st.error(translate("concept.blueprint_error", language, error=e))
-
-    render_generated_visuals(language)
+    if st.button(
+        translate("concept.open_drawing_studio", language),
+        key="open_drawing_studio",
+        use_container_width=True,
+    ):
+        set_current_page("drawing_studio")
+        st.rerun()
 
 
 def _render_implementation_roadmap(concept_data, language):
@@ -526,7 +488,7 @@ def render_concept_result(concept_data):
         image_errors,
         viewer_language,
     )
-    _render_visual_generation(concept_data, viewer_language)
+    _render_engineering_drawing_studio(viewer_language)
     _render_implementation_roadmap(concept_data, viewer_language)
     _render_risks_and_constraints(concept_data, viewer_language)
     _render_commercial_outlook(concept_data, viewer_language)

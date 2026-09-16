@@ -19,7 +19,6 @@ from ui.state import (
     USER_PROMPT_WIDGET,
     clear_automatic_image_generation_state,
     clear_current_concept,
-    clear_transient_visuals,
     get_current_concept_id,
     get_current_language,
     set_current_concept,
@@ -115,7 +114,6 @@ def render_previous_concepts_sidebar():
                                 concept_id,
                                 concept_language or language,
                             )
-                            clear_transient_visuals()
                             clear_automatic_image_generation_state()
                             st.rerun()
 

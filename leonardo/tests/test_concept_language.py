@@ -129,7 +129,7 @@ def test_concept_renderer_passes_viewer_language_to_every_section(
     for function_name in (
         "_render_leonardo_vision",
         "_render_modern_implementation",
-        "_render_visual_generation",
+        "_render_engineering_drawing_studio",
         "_render_implementation_roadmap",
         "_render_risks_and_constraints",
         "_render_commercial_outlook",

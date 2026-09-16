@@ -4,7 +4,10 @@ from ui import state
 from ui.router import render_current_page
 
 
-@pytest.mark.parametrize("selected_page", ("app", "gallery", "marketplace"))
+@pytest.mark.parametrize(
+    "selected_page",
+    ("app", "gallery", "marketplace", "drawing_studio"),
+)
 def test_route_renders_only_selected_screen(selected_page):
     rendered = []
 
@@ -13,6 +16,7 @@ def test_route_renders_only_selected_screen(selected_page):
         app_renderer=lambda: rendered.append("app"),
         gallery_renderer=lambda: rendered.append("gallery"),
         marketplace_renderer=lambda: rendered.append("marketplace"),
+        drawing_studio_renderer=lambda: rendered.append("drawing_studio"),
     )
 
     assert rendered == [selected_page]
@@ -33,6 +37,7 @@ def test_marketplace_route_does_not_call_concept_or_image_generation():
         app_renderer=forbidden_app_renderer,
         gallery_renderer=lambda: None,
         marketplace_renderer=marketplace_renderer,
+        drawing_studio_renderer=lambda: None,
     )
 
     assert calls == {
@@ -53,7 +58,7 @@ def test_switching_routes_preserves_current_concept_and_generate_images(monkeypa
     }
     monkeypatch.setattr(state.st, "session_state", session_state)
 
-    for page in ("marketplace", "gallery", "app"):
+    for page in ("marketplace", "gallery", "drawing_studio", "app"):
         state.set_current_page(page)
         assert state.get_current_page() == page
         assert session_state[state.CURRENT_CONCEPT] is current_concept
@@ -69,4 +74,5 @@ def test_unknown_route_is_rejected():
             app_renderer=lambda: None,
             gallery_renderer=lambda: None,
             marketplace_renderer=lambda: None,
+            drawing_studio_renderer=lambda: None,
         )

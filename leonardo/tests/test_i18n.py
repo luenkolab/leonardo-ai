@@ -86,6 +86,49 @@ def test_generate_images_setting_is_translated_in_every_language():
     } == expected
 
 
+def test_engineering_drawing_studio_ui_is_translated_in_every_language():
+    keys = (
+        "concept.engineering_drawing_studio",
+        "concept.engineering_drawing_studio_description",
+        "concept.open_drawing_studio",
+    )
+    english = {key: translate(key, "en") for key in keys}
+
+    for language in LANGUAGES:
+        assert all(key in TRANSLATIONS[language] for key in keys)
+        if language != "en":
+            assert all(translate(key, language) != english[key] for key in keys)
+
+
+def test_drawing_studio_screen_is_translated_in_every_language():
+    keys = (
+        "drawing_studio.back_to_concept",
+        "drawing_studio.subtitle",
+        "drawing_studio.project_context",
+        "drawing_studio.project",
+        "drawing_studio.short_summary",
+        "drawing_studio.reference_visuals",
+        "drawing_studio.reference_notice",
+        "drawing_studio.engineering_data",
+        "drawing_studio.engineering_parameters",
+        "drawing_studio.parameters_description",
+        "drawing_studio.drawing_package",
+        "drawing_studio.general_arrangement",
+        "drawing_studio.orthographic_views",
+        "drawing_studio.assembly_drawings",
+        "drawing_studio.component_detail_drawings",
+        "drawing_studio.connections_fasteners",
+        "drawing_studio.bill_of_materials",
+        "drawing_studio.not_generated",
+    )
+    english = {key: translate(key, "en") for key in keys}
+
+    for language in LANGUAGES:
+        assert all(key in TRANSLATIONS[language] for key in keys)
+        if language != "en":
+            assert all(translate(key, language) != english[key] for key in keys)
+
+
 def test_unknown_language_and_missing_locale_value_fall_back_to_english():
     assert translate("concept.title", "unknown") == "Title"
     assert translate("missing.translation.key", "ru") == "missing.translation.key"

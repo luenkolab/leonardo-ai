@@ -55,10 +55,7 @@ def render_result_box(
 def render_generated_section_heading(title, icon_svg):
     st.markdown(
         f"""
-<h2 class="generated-section-heading">
-    <span class="generated-section-heading__icon">{icon_svg}</span>
-    {safe_text(title)}
-</h2>
+<h2 class="generated-section-heading">{f'<span class="generated-section-heading__icon">{icon_svg}</span>' if icon_svg else ''}{safe_text(title)}</h2>
 """,
         unsafe_allow_html=True,
     )

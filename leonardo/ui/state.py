@@ -8,8 +8,6 @@ from ui.router import VALID_PAGES
 CURRENT_CONCEPT = "current_concept"
 CURRENT_CONCEPT_ID = "current_concept_id"
 CURRENT_CONCEPT_LANGUAGE = "current_concept_language"
-LEONARDO_ASSET = "leonardo_visual_asset"
-BLUEPRINT_ASSET = "blueprint_visual_asset"
 CURRENT_PAGE = "page"
 AUTO_IMAGE_PENDING_CONCEPT_ID = "auto_image_pending_concept_id"
 AUTO_IMAGE_ERRORS = "auto_image_errors"
@@ -41,12 +39,6 @@ def initialize_session_state() -> None:
         st.session_state[CURRENT_CONCEPT_LANGUAGE] = normalize_language(
             st.session_state[CURRENT_CONCEPT_LANGUAGE]
         )
-
-    if LEONARDO_ASSET not in st.session_state:
-        st.session_state[LEONARDO_ASSET] = None
-
-    if BLUEPRINT_ASSET not in st.session_state:
-        st.session_state[BLUEPRINT_ASSET] = None
 
     if CURRENT_PAGE not in st.session_state:
         st.session_state[CURRENT_PAGE] = _DEFAULT_PAGE
@@ -88,14 +80,7 @@ def clear_current_concept() -> None:
     st.session_state[CURRENT_CONCEPT] = None
     st.session_state[CURRENT_CONCEPT_ID] = None
     st.session_state[CURRENT_CONCEPT_LANGUAGE] = DEFAULT_LANGUAGE
-    st.session_state[LEONARDO_ASSET] = None
-    st.session_state[BLUEPRINT_ASSET] = None
     clear_automatic_image_generation_state()
-
-
-def clear_transient_visuals() -> None:
-    st.session_state[LEONARDO_ASSET] = None
-    st.session_state[BLUEPRINT_ASSET] = None
 
 
 def get_current_concept() -> dict | None:

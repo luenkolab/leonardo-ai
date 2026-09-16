@@ -78,6 +78,19 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS engineering_parameter_sets (
+            concept_id INTEGER PRIMARY KEY,
+            parameters_json TEXT NOT NULL
+                CHECK (json_valid(parameters_json)),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (concept_id)
+                REFERENCES concepts(id)
+                ON DELETE CASCADE
+        )
+    """)
+
     cursor.execute(
         """
         UPDATE concepts
@@ -327,6 +340,55 @@ def save_concept_translation(concept_id, language_code, translated_content):
             updated_at = CURRENT_TIMESTAMP
         """,
         (concept_id, normalize_language(language_code), serialized),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_engineering_parameter_set(concept_id):
+    """Return one concept-owned engineering parameter set, if it exists."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT parameters_json
+        FROM engineering_parameter_sets
+        WHERE concept_id = ?
+        """,
+        (concept_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+    try:
+        value = json.loads(row[0])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("Stored engineering parameter set is not valid JSON") from exc
+    if not isinstance(value, dict):
+        raise ValueError("Stored engineering parameter set must be a JSON object")
+    return value
+
+
+def save_engineering_parameter_set(concept_id, parameter_set):
+    """Atomically persist one structured parameter set for a concept."""
+    serialized = json.dumps(parameter_set, ensure_ascii=False)
+    parsed = json.loads(serialized)
+    if not isinstance(parsed, dict):
+        raise ValueError("Engineering parameter set must be a JSON object")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO engineering_parameter_sets (concept_id, parameters_json)
+        VALUES (?, ?)
+        ON CONFLICT(concept_id) DO UPDATE SET
+            parameters_json = excluded.parameters_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (concept_id, serialized),
     )
     conn.commit()
     conn.close()

@@ -575,11 +575,6 @@ def test_generation_event_is_started_after_concept_is_saved(
     monkeypatch.setattr(concept_page, "get_current_concept", lambda: None)
     monkeypatch.setattr(
         concept_page,
-        "clear_transient_visuals",
-        lambda: events.append("clear-visuals"),
-    )
-    monkeypatch.setattr(
-        concept_page,
         "generate_and_save_concept",
         lambda **kwargs: (events.append("save-concept") or (valid_concept, 42)),
     )
@@ -609,7 +604,6 @@ def test_generation_event_is_started_after_concept_is_saved(
     )
 
     assert events == [
-        "clear-visuals",
         "save-concept",
         ("set-concept", 42, "en"),
         ("start-images", 42),
@@ -624,7 +618,6 @@ def test_generation_with_images_disabled_saves_text_without_starting_images(
     events = []
 
     monkeypatch.setattr(concept_page, "get_current_concept", lambda: None)
-    monkeypatch.setattr(concept_page, "clear_transient_visuals", lambda: None)
     monkeypatch.setattr(
         concept_page,
         "generate_and_save_concept",
@@ -656,6 +649,64 @@ def test_generation_with_images_disabled_saves_text_without_starting_images(
 
     assert result == valid_concept
     assert events == ["clear-image-state"]
+
+
+def test_engineering_drawing_studio_renders_without_image_generation(monkeypatch):
+    headings = []
+    descriptions = []
+    buttons = []
+    monkeypatch.setattr(
+        concept_page,
+        "render_generated_section_heading",
+        lambda title, icon: headings.append((title, icon)),
+    )
+    monkeypatch.setattr(
+        concept_page.st,
+        "markdown",
+        lambda markup, **kwargs: descriptions.append((markup, kwargs)),
+    )
+    monkeypatch.setattr(
+        concept_page.st,
+        "button",
+        lambda label, **kwargs: buttons.append((label, kwargs)) or False,
+    )
+    monkeypatch.setattr(
+        concept_page,
+        "generate_and_save_concept_images",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Drawing Studio entry point must not call the image API")
+        ),
+    )
+
+    concept_page._render_engineering_drawing_studio("en")
+
+    assert headings[0][0] == "Engineering Drawing Studio"
+    assert 'class="result-title"' in descriptions[0][0]
+    assert 'class="result-title-icon"' in descriptions[0][0]
+    assert 'style="margin-bottom: 1.25rem;"' in descriptions[0][0]
+    assert "Create a structured technical drawing package from validated project data " \
+        "and engineering parameters." in descriptions[0][0]
+    assert 'class="result-box' not in descriptions[0][0]
+    assert buttons == [
+        (
+            "Open Drawing Studio",
+            {"key": "open_drawing_studio", "use_container_width": True},
+        )
+    ]
+
+
+def test_legacy_manual_visual_state_and_application_functions_are_removed(monkeypatch):
+    session_state = {}
+    monkeypatch.setattr(state.st, "session_state", session_state)
+
+    state.initialize_session_state()
+
+    assert "leonardo" + "_visual_asset" not in session_state
+    assert "blueprint" + "_visual_asset" not in session_state
+    assert not hasattr(application_images, "generate_" + "leonardo_visual")
+    assert not hasattr(application_images, "generate_" + "blueprint_visual")
+    assert not hasattr(image_service, "generate_leonardo_image_prompt")
+    assert not hasattr(image_service, "generate_blueprint_image_prompt")
 
 
 def test_loading_saved_concept_does_not_start_generation(monkeypatch, valid_concept):
@@ -1038,7 +1089,7 @@ def test_failed_new_concept_generation_never_falls_back_to_previous_images(
     ) == {}
 
 
-def test_manual_types_and_legacy_views_remain_isolated():
+def test_legacy_image_types_remain_isolated_from_automatic_slots():
     concept_records = [
         _image_record(1, "leonardo"),
         _image_record(2, "blueprint"),
