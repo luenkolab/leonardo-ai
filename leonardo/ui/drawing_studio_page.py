@@ -5,6 +5,10 @@ from application.concepts import (
     list_recent_concepts,
     load_concept_for_viewer,
 )
+from application.engineering_parameters import (
+    load_engineering_parameters_for_viewer,
+    save_engineering_parameter_values,
+)
 from application.images import MODERN_CONCEPT_IMAGE_TYPES, get_concept_image_slots
 from database import (
     get_concept_prompt,
@@ -17,7 +21,6 @@ from services.engineering_parameters_service import (
     calculate_readiness,
     merge_project_suggestions,
     suggest_project_parameters,
-    update_parameter,
     validate_parameter_set,
 )
 from ui.components import render_generated_section_heading, render_result_box
@@ -37,93 +40,59 @@ def _parameter_label(parameter, language):
     return parameter["label"]
 
 
-def _render_parameter_rows(concept_id, parameter_set, group_name, language):
+def _render_parameter_rows(
+    concept_id,
+    parameter_set,
+    group_name,
+    language,
+    edit_mode,
+):
     parameters = parameter_set[group_name]
     if not parameters:
         st.caption(translate("engineering_parameters.none_suggested", language))
-        return
+        return {}
 
-    headings = st.columns((1.7, 2.0, 1.0, 0.9, 4.7))
+    headings = st.columns((2.3, 1.5, 2.3, 1.2))
     for column, key in zip(
-        headings,
-        ("parameter", "value", "unit", "status", "actions"),
+        (headings[2], headings[3]),
+        ("value", "unit"),
     ):
         column.markdown(f"**{translate(f'engineering_parameters.{key}', language)}**")
 
+    rendered_values = {}
     for parameter in parameters:
         row = st.columns(
-            (1.7, 2.0, 1.0, 0.9, 4.7),
+            (2.3, 1.5, 2.3, 1.2),
             vertical_alignment="center",
         )
         row[0].markdown(f"**{_parameter_label(parameter, language)}**")
-        value = row[1].text_input(
+        value = row[2].text_input(
             translate("engineering_parameters.value", language),
             value=parameter["value"] or "",
             key=f"engineering_parameter_value_{concept_id}_{parameter['key']}",
             label_visibility="collapsed",
-        )
-        unit = row[2].text_input(
+            disabled=not edit_mode,
+            width=360,
+        ).strip() or None
+        unit = row[3].text_input(
             translate("engineering_parameters.unit", language),
             value=parameter["unit"] or "",
-            key=f"engineering_parameter_unit_{concept_id}_{parameter['key']}",
+            key=(
+                f"engineering_parameter_unit_{concept_id}_"
+                f"{parameter['key']}_{language}"
+            ),
             label_visibility="collapsed",
-        )
-        row[3].markdown(
-            translate(
-                f"engineering_parameters.status.{parameter['status']}",
-                language,
-            )
-        )
-        if parameter["rationale"]:
+            disabled=not edit_mode,
+        ).strip() or None
+        rendered_values[parameter["key"]] = (value, unit)
+        if group_name == "project_specific" and parameter["rationale"]:
             st.caption(
                 f"{translate('engineering_parameters.ai_suggestion', language)}: "
                 f"{parameter['rationale']}"
             )
+        st.space("small" if parameter is parameters[-1] else "xxsmall")
 
-        confirm_key = (
-            "accept"
-            if group_name == "project_specific" and parameter["status"] == "suggested"
-            else "confirm"
-        )
-        with row[4]:
-            with st.container(
-                horizontal=True,
-                horizontal_alignment="right",
-                vertical_alignment="center",
-                gap="small",
-            ):
-                edit_clicked = st.button(
-                    translate("engineering_parameters.edit", language),
-                    key=f"engineering_parameter_edit_{concept_id}_{parameter['key']}",
-                )
-                confirm_clicked = False
-                if parameter["status"] != "confirmed":
-                    confirm_clicked = st.button(
-                        translate(f"engineering_parameters.{confirm_key}", language),
-                        key=f"engineering_parameter_confirm_{concept_id}_{parameter['key']}",
-                    )
-                not_applicable_clicked = st.button(
-                    translate("engineering_parameters.not_applicable", language),
-                    key=f"engineering_parameter_na_{concept_id}_{parameter['key']}",
-                )
-        if not (edit_clicked or confirm_clicked or not_applicable_clicked):
-            continue
-
-        action = (
-            "not_applicable"
-            if not_applicable_clicked
-            else "confirm" if confirm_clicked else "edit"
-        )
-        updated = update_parameter(
-            parameter_set,
-            group_name,
-            parameter["key"],
-            value,
-            unit,
-            action,
-        )
-        save_engineering_parameter_set(concept_id, updated)
-        st.rerun()
+    return rendered_values
 
 
 def _render_engineering_parameters(
@@ -132,39 +101,105 @@ def _render_engineering_parameters(
     category,
     language,
 ):
-    stored = get_engineering_parameter_set(concept_id)
-    parameter_set = validate_parameter_set(stored or build_empty_parameter_set())
+    parameter_set = load_engineering_parameters_for_viewer(concept_id, language)
     readiness = calculate_readiness(parameter_set)
-    render_result_box(
-        translate("engineering_parameters.inputs", language),
-        [
-            translate(f"engineering_parameters.readiness.{readiness}", language),
-            translate("engineering_parameters.note", language),
-        ],
-        visual_variant="blue",
-    )
 
-    if st.button(
-        translate("engineering_parameters.suggest", language),
-        key=f"engineering_parameters_suggest_{concept_id}",
+    for group_name, heading_key in (
+        ("universal", "universal"),
+        ("project_specific", "project_specific"),
     ):
-        try:
-            suggestions = suggest_project_parameters(
-                concept_data,
-                category,
-                get_concept_prompt(concept_id),
-                language,
-            )
-            parameter_set = merge_project_suggestions(parameter_set, suggestions)
-            save_engineering_parameter_set(concept_id, parameter_set)
-            st.rerun()
-        except (RuntimeError, ValueError):
-            st.error(translate("engineering_parameters.suggestion_error", language))
+        edit_mode_key = f"engineering_parameters_edit_mode_{concept_id}_{group_name}"
+        edit_mode = bool(st.session_state.get(edit_mode_key, False))
+        if group_name == "project_specific":
+            with st.container(
+                horizontal=True,
+                horizontal_alignment="left",
+                vertical_alignment="center",
+                gap="small",
+            ):
+                st.subheader(
+                    translate(f"engineering_parameters.{heading_key}", language),
+                    width="content",
+                )
+                suggest_clicked = st.button(
+                    translate("engineering_parameters.suggest", language),
+                    key=f"engineering_parameters_suggest_{concept_id}",
+                    help=translate("engineering_parameters.suggest", language),
+                    type="secondary",
+                    width=32,
+                )
+        else:
+            st.subheader(translate(f"engineering_parameters.{heading_key}", language))
 
-    st.subheader(translate("engineering_parameters.universal", language))
-    _render_parameter_rows(concept_id, parameter_set, "universal", language)
-    st.subheader(translate("engineering_parameters.project_specific", language))
-    _render_parameter_rows(concept_id, parameter_set, "project_specific", language)
+        if group_name == "project_specific" and suggest_clicked:
+            try:
+                stored = get_engineering_parameter_set(concept_id)
+                source_parameter_set = validate_parameter_set(
+                    stored or build_empty_parameter_set()
+                )
+                suggestions = suggest_project_parameters(
+                    concept_data,
+                    category,
+                    get_concept_prompt(concept_id),
+                    language,
+                )
+                source_parameter_set = merge_project_suggestions(
+                    source_parameter_set,
+                    suggestions,
+                )
+                save_engineering_parameter_set(
+                    concept_id,
+                    source_parameter_set,
+                    source_language=language,
+                )
+                st.rerun()
+            except (RuntimeError, ValueError):
+                st.error(translate("engineering_parameters.suggestion_error", language))
+
+        rendered_values = _render_parameter_rows(
+            concept_id,
+            parameter_set,
+            group_name,
+            language,
+            edit_mode,
+        )
+
+        with st.container(
+            horizontal=True,
+            horizontal_alignment="right",
+            vertical_alignment="center",
+            gap="small",
+        ):
+            edit_clicked = st.button(
+                translate("engineering_parameters.edit", language),
+                key=f"engineering_parameters_edit_{concept_id}_{group_name}",
+                disabled=edit_mode,
+                type="secondary",
+                width="content",
+            )
+            save_clicked = st.button(
+                translate("engineering_parameters.save", language),
+                key=f"engineering_parameters_save_{concept_id}_{group_name}",
+                disabled=not edit_mode,
+                type="secondary",
+                width="content",
+            )
+        if group_name == "universal":
+            st.space("xxsmall")
+
+        if edit_clicked:
+            st.session_state[edit_mode_key] = True
+            st.rerun()
+
+        if save_clicked:
+            save_engineering_parameter_values(
+                concept_id,
+                parameter_set,
+                group_name,
+                rendered_values,
+            )
+            st.session_state[edit_mode_key] = False
+            st.rerun()
 
 
 def _get_current_category(concept_id):
@@ -280,6 +315,7 @@ def render_drawing_studio():
             visual_variant="blue",
         )
 
+    st.space(40)
     render_generated_section_heading(
         translate("drawing_studio.engineering_parameters", language),
         "",

@@ -343,9 +343,14 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    [class*="st-key-engineering_parameters_edit_"],
+    [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
     .st-key-remove_current_concept_from_marketplace
 ) :is([data-testid="stButton"], [data-testid="stDownloadButton"]) > button {
+    min-width: 101px;
+    min-height: 38px !important;
+    height: 38px !important;
     color: #f3e7c4 !important;
     background: var(--control-background) !important;
     border-color: rgba(217,168,79,0.34) !important;
@@ -363,6 +368,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    [class*="st-key-engineering_parameters_edit_"],
+    [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
     .st-key-remove_current_concept_from_marketplace
 ) :is([data-testid="stButton"], [data-testid="stDownloadButton"]) > button:hover {
@@ -421,7 +428,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 13v-2a8 8 0 0 1 16 0v2M4 13H2v5h4v-5H4ZM20 13h2v5h-4v-5h2ZM18 18c-1 2-3 3-6 3'/%3E%3C/svg%3E");
 }
 
-.st-key-voice_engineering button p::before {
+.st-key-voice_engineering button p::before,
+[class*="st-key-engineering_parameters_suggest_"] button p::before {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1'/%3E%3C/svg%3E");
 }
@@ -470,6 +478,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    [class*="st-key-engineering_parameters_edit_"],
+    [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
     .st-key-remove_current_concept_from_marketplace
 ) :is([data-testid="stButton"], [data-testid="stDownloadButton"]) > button:is(:focus, :focus-visible),
@@ -1065,16 +1075,19 @@ section[data-testid="stSidebar"] .st-key-voice_prompt [data-testid="stButton"] >
 section[data-testid="stSidebar"] .sidebar-group-title--settings,
 section[data-testid="stSidebar"] .st-key-generate_idea button p,
 section[data-testid="stSidebar"] .st-key-regenerate_idea button p,
-section[data-testid="stSidebar"] .st-key-voice_prompt button p {
+section[data-testid="stSidebar"] .st-key-voice_prompt button p,
+[class*="st-key-engineering_parameters_suggest_"] button p {
     display: flex !important;
     align-items: center !important;
-    gap: 10px !important;
+    gap: var(--icon-button-gap, 10px) !important;
+    font-size: var(--icon-button-label-size, inherit) !important;
 }
 
 section[data-testid="stSidebar"] .sidebar-group-title--settings::before,
 section[data-testid="stSidebar"] .st-key-generate_idea button p::before,
 section[data-testid="stSidebar"] .st-key-regenerate_idea button p::before,
 section[data-testid="stSidebar"] .st-key-voice_prompt button p::before,
+[class*="st-key-engineering_parameters_suggest_"] button p::before,
 section[data-testid="stSidebar"] .mini-card-favorite,
 section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-open_concept_"] button [data-testid="stMarkdownContainer"]::before,
 section[data-testid="stSidebar"] .st-key-previous_concepts [class*="st-key-favorite_concept_"] button [data-testid="stMarkdownContainer"]::before,
@@ -1881,28 +1894,35 @@ div.st-key-marketplace_active_category div[data-testid="stButton"] > button:is(:
 
 .st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] {
     pointer-events: auto;
+    --marketplace-carousel-button-radius: 999px;
+    --marketplace-carousel-button-size: 38px;
 }
 
-.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button {
-    width: 38px !important;
-    min-width: 38px !important;
-    height: 38px !important;
-    min-height: 38px !important;
+.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button,
+[class*="st-key-engineering_parameters_suggest_"] button {
+    --icon-button-label-size: 0;
+    --icon-button-gap: 0;
+    width: var(--marketplace-carousel-button-size, 32px) !important;
+    min-width: var(--marketplace-carousel-button-size, 32px) !important;
+    height: var(--marketplace-carousel-button-size, 32px) !important;
+    min-height: var(--marketplace-carousel-button-size, 32px) !important;
     padding: 0 !important;
     color: #ead7a4 !important;
     background: var(--control-background) !important;
     border: 1px solid rgba(217,168,79,0.42) !important;
-    border-radius: 999px !important;
+    border-radius: var(--marketplace-carousel-button-radius, 11px) !important;
     box-shadow: var(--control-depth) !important;
 }
 
-.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button:hover {
+.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button:hover,
+[class*="st-key-engineering_parameters_suggest_"] button:hover {
     transform: none !important;
     background: var(--control-hover-background) !important;
     border-color: rgba(234,215,164,0.58) !important;
 }
 
-.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button:is(:focus, :focus-visible) {
+.st-key-marketplace_project_carousel [class*="st-key-marketplace_carousel_"] button:is(:focus, :focus-visible),
+[class*="st-key-engineering_parameters_suggest_"] button:is(:focus, :focus-visible) {
     outline: none !important;
     box-shadow: var(--control-depth) !important;
 }

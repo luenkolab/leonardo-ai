@@ -1,8 +1,12 @@
+import copy
 import json
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import database
+from application import engineering_parameters as parameter_application
 from i18n import LANGUAGES, TRANSLATIONS
+from services import concept_translation_service
 from services import engineering_parameters_service as service
 from ui import drawing_studio_page
 
@@ -208,16 +212,29 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
     )
     monkeypatch.setattr(
         drawing_studio_page,
+        "load_engineering_parameters_for_viewer",
+        lambda *_args: service.build_empty_parameter_set(),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
         "suggest_project_parameters",
         lambda *args: calls.append(args),
     )
+    monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
     monkeypatch.setattr(drawing_studio_page.st, "button", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "container",
+        lambda **kwargs: nullcontext(),
+    )
     monkeypatch.setattr(drawing_studio_page.st, "subheader", lambda *args, **kwargs: None)
     monkeypatch.setattr(drawing_studio_page, "render_result_box", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         drawing_studio_page,
         "_render_parameter_rows",
-        lambda _concept_id, _parameter_set, group, _language: rendered_groups.append(group),
+        lambda _concept_id, _parameter_set, group, _language, edit_mode: rendered_groups.append(
+            (group, edit_mode)
+        ),
     )
 
     drawing_studio_page._render_engineering_parameters(
@@ -228,7 +245,181 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
     )
 
     assert calls == []
-    assert rendered_groups == ["universal", "project_specific"]
+    assert rendered_groups == [
+        ("universal", False),
+        ("project_specific", False),
+    ]
+
+
+def test_edit_enables_value_and_unit_fields_in_both_parameter_blocks(monkeypatch):
+    field_states = []
+
+    class Column:
+        def markdown(self, *args, **kwargs):
+            return None
+
+        def text_input(self, _label, value, **kwargs):
+            field_states.append(kwargs["disabled"])
+            return value
+
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["universal"] = parameter_set["universal"][:1]
+    parameter_set["project_specific"] = [
+        _project_parameter("payload", "25", "suggested")
+    ]
+    captions = []
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "columns",
+        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "caption",
+        lambda text: captions.append(text),
+    )
+
+    drawing_studio_page._render_parameter_rows(
+        5,
+        parameter_set,
+        "universal",
+        "en",
+        False,
+    )
+    drawing_studio_page._render_parameter_rows(
+        5,
+        parameter_set,
+        "project_specific",
+        "en",
+        False,
+    )
+    assert field_states == [True, True, True, True]
+    assert captions == ["AI Suggestion: Needed for project preparation"]
+
+    field_states.clear()
+    drawing_studio_page._render_parameter_rows(
+        5,
+        parameter_set,
+        "universal",
+        "en",
+        True,
+    )
+    drawing_studio_page._render_parameter_rows(
+        5,
+        parameter_set,
+        "project_specific",
+        "en",
+        True,
+    )
+    assert field_states == [False, False, False, False]
+
+
+def test_block_saves_are_independent_and_update_internal_statuses(
+    monkeypatch,
+    temporary_database,
+    valid_concept,
+):
+    first_id = _save_test_concept(valid_concept, "Editable project")
+    second_id = _save_test_concept(valid_concept, "Isolated project")
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["project_specific"] = [
+        _project_parameter("payload", "AI value", "suggested")
+    ]
+    database.save_engineering_parameter_set(first_id, parameter_set)
+    isolated = service.build_empty_parameter_set()
+    isolated["universal"][0]["value"] = "Imperial"
+    isolated["universal"][0]["status"] = "confirmed"
+    database.save_engineering_parameter_set(second_id, isolated)
+
+    reruns = []
+    ai_calls = []
+    active_group = ["universal"]
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "session_state",
+        {
+            f"engineering_parameters_edit_mode_{first_id}_universal": True,
+            f"engineering_parameters_edit_mode_{first_id}_project_specific": False,
+        },
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "button",
+        lambda _label, **kwargs: kwargs.get("key")
+        == f"engineering_parameters_save_{first_id}_{active_group[0]}",
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "container",
+        lambda **kwargs: nullcontext(),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "subheader",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "rerun", lambda: reruns.append(True))
+    monkeypatch.setattr(drawing_studio_page, "render_result_box", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "suggest_project_parameters",
+        lambda *args: ai_calls.append(args),
+    )
+
+    def render_rows(_concept_id, current, group_name, _language, edit_mode):
+        assert edit_mode is (group_name == active_group[0])
+        values = {
+            parameter["key"]: (parameter["value"], parameter["unit"])
+            for parameter in current[group_name]
+        }
+        if group_name == "universal" and active_group[0] == "universal":
+            values[current[group_name][0]["key"]] = ("SI", "system")
+        if group_name == "project_specific" and active_group[0] == "project_specific":
+            values[current[group_name][0]["key"]] = ("Reviewed AI value", "kg")
+        return values
+
+    monkeypatch.setattr(drawing_studio_page, "_render_parameter_rows", render_rows)
+
+    drawing_studio_page._render_engineering_parameters(
+        first_id,
+        valid_concept,
+        "robotics_automation",
+        "en",
+    )
+
+    reloaded = database.get_engineering_parameter_set(first_id)
+    assert reloaded["universal"][0]["value"] == "SI"
+    assert reloaded["universal"][0]["unit"] == "system"
+    assert reloaded["universal"][0]["status"] == "confirmed"
+    assert reloaded["universal"][1]["value"] is None
+    assert reloaded["universal"][1]["status"] == "missing"
+    assert reloaded["project_specific"][0]["value"] == "AI value"
+    assert reloaded["project_specific"][0]["status"] == "suggested"
+    assert drawing_studio_page.st.session_state[
+        f"engineering_parameters_edit_mode_{first_id}_universal"
+    ] is False
+
+    active_group[0] = "project_specific"
+    drawing_studio_page.st.session_state[
+        f"engineering_parameters_edit_mode_{first_id}_project_specific"
+    ] = True
+    drawing_studio_page._render_engineering_parameters(
+        first_id,
+        valid_concept,
+        "robotics_automation",
+        "en",
+    )
+
+    reloaded = database.get_engineering_parameter_set(first_id)
+    assert reloaded["project_specific"][0]["value"] == "Reviewed AI value"
+    assert reloaded["project_specific"][0]["unit"] == "kg"
+    assert reloaded["project_specific"][0]["status"] == "confirmed"
+    assert database.get_engineering_parameter_set(second_id)["universal"][0]["value"] == "Imperial"
+    assert drawing_studio_page.st.session_state[
+        f"engineering_parameters_edit_mode_{first_id}_project_specific"
+    ] is False
+    assert ai_calls == []
+    assert reruns == [True, True]
 
 
 def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
@@ -240,6 +431,11 @@ def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
         "get_engineering_parameter_set",
         lambda _concept_id: None,
     )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "load_engineering_parameters_for_viewer",
+        lambda *_args: service.build_empty_parameter_set(),
+    )
     monkeypatch.setattr(drawing_studio_page, "get_concept_prompt", lambda _concept_id: "prompt")
     monkeypatch.setattr(
         drawing_studio_page,
@@ -249,9 +445,19 @@ def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
     monkeypatch.setattr(
         drawing_studio_page,
         "save_engineering_parameter_set",
-        lambda *args: saved.append(args),
+        lambda *args, **kwargs: saved.append((args, kwargs)),
     )
-    monkeypatch.setattr(drawing_studio_page.st, "button", lambda *args, **kwargs: True)
+    monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "button",
+        lambda _label, **kwargs: kwargs.get("key") == "engineering_parameters_suggest_12",
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "container",
+        lambda **kwargs: nullcontext(),
+    )
     monkeypatch.setattr(drawing_studio_page.st, "rerun", lambda: reruns.append(True))
     monkeypatch.setattr(drawing_studio_page.st, "subheader", lambda *args, **kwargs: None)
     monkeypatch.setattr(drawing_studio_page, "render_result_box", lambda *args, **kwargs: None)
@@ -265,8 +471,9 @@ def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
     )
 
     assert len(calls) == 1
-    assert saved[0][0] == 12
-    assert saved[0][1]["project_specific"][0]["key"] == "payload"
+    assert saved[0][0][0] == 12
+    assert saved[0][0][1]["project_specific"][0]["key"] == "payload"
+    assert saved[0][1] == {"source_language": "en"}
     assert reruns == [True]
 
 
@@ -276,5 +483,127 @@ def test_all_engineering_parameter_ui_keys_exist_for_all_languages():
         for key in TRANSLATIONS["en"]
         if key.startswith("engineering_parameters.")
     }
-    assert len(keys) == 36
+    assert len(keys) == 37
     assert all(keys <= set(TRANSLATIONS[language]) for language in LANGUAGES)
+
+
+def test_viewer_translation_is_cached_and_preserves_canonical_parameters(
+    temporary_database,
+    valid_concept,
+    monkeypatch,
+):
+    concept_id = _save_test_concept(valid_concept, "Bridge")
+    canonical = service.build_empty_parameter_set()
+    parameter = _project_parameter(
+        "assembly_time",
+        "1-3 hours",
+        "suggested",
+        label="Assembly Time",
+    )
+    parameter["unit"] = "hours"
+    canonical["project_specific"] = [parameter]
+    database.save_engineering_parameter_set(concept_id, canonical, "en")
+    calls = []
+
+    def translate(original, source_language, target_language):
+        calls.append((source_language, target_language))
+        translated = copy.deepcopy(original)
+        translated["project_specific"][0].update(
+            {
+                "label": "Время сборки",
+                "rationale": "Предполагается модульная конструкция.",
+                "unit": "часы",
+            }
+        )
+        return translated
+
+    monkeypatch.setattr(
+        concept_translation_service,
+        "translate_engineering_parameter_set",
+        translate,
+    )
+
+    english = parameter_application.load_engineering_parameters_for_viewer(
+        concept_id,
+        "en",
+    )
+    russian = parameter_application.load_engineering_parameters_for_viewer(
+        concept_id,
+        "ru",
+    )
+    russian_again = parameter_application.load_engineering_parameters_for_viewer(
+        concept_id,
+        "ru",
+    )
+    english_again = parameter_application.load_engineering_parameters_for_viewer(
+        concept_id,
+        "en",
+    )
+    parameter_application.load_engineering_parameters_for_viewer(concept_id, "ru")
+
+    assert calls == [("en", "ru")]
+    assert english_again == english == canonical
+    assert russian_again == russian
+    assert russian["project_specific"][0]["label"] == "Время сборки"
+    assert russian["project_specific"][0]["rationale"].startswith("Предполагается")
+    assert russian["project_specific"][0]["unit"] == "часы"
+    assert russian["project_specific"][0]["value"] == "1-3 hours"
+    assert database.get_engineering_parameter_set(concept_id) == canonical
+
+
+def test_structured_translation_changes_only_display_fields(monkeypatch):
+    parameter_set = service.build_empty_parameter_set()
+    hours = _project_parameter("assembly_time", "1-3 hours", "suggested")
+    hours["unit"] = "hours"
+    percent = _project_parameter("efficiency", "15-20", "suggested")
+    percent["unit"] = "%"
+    parameter_set["project_specific"] = [hours, percent]
+    response_payload = {
+        "project_specific": [
+            {
+                "key": "assembly_time",
+                "label": "Время сборки",
+                "rationale": "Необходимо для подготовки проекта",
+                "unit": "часы",
+            },
+            {
+                "key": "efficiency",
+                "label": "Эффективность",
+                "rationale": "Необходимо для подготовки проекта",
+                "unit": "%",
+            },
+        ]
+    }
+    calls = []
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kwargs: calls.append(kwargs)
+                or SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content=json.dumps(
+                                    response_payload,
+                                    ensure_ascii=False,
+                                )
+                            )
+                        )
+                    ]
+                )
+            )
+        )
+    )
+    monkeypatch.setattr(concept_translation_service, "get_text_client", lambda: client)
+
+    translated = concept_translation_service.translate_engineering_parameter_set(
+        parameter_set,
+        "en",
+        "ru",
+    )
+
+    assert len(calls) == 1
+    assert translated["project_specific"][0]["unit"] == "часы"
+    assert translated["project_specific"][1]["unit"] == "%"
+    assert translated["project_specific"][0]["value"] == "1-3 hours"
+    assert translated["project_specific"][0]["status"] == "suggested"

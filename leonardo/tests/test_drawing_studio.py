@@ -149,7 +149,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
         heading for heading in headings if heading[0] == "Engineering Data"
     )
     assert engineering_heading[2] == {}
-    assert spaces == [40]
+    assert spaces == [40, 40]
     assert tuple(image_type for image_type, _images in rendered_slots) == (
         MODERN_CONCEPT_IMAGE_TYPES
     )

@@ -83,11 +83,31 @@ def init_db():
             concept_id INTEGER PRIMARY KEY,
             parameters_json TEXT NOT NULL
                 CHECK (json_valid(parameters_json)),
+            source_language TEXT,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (concept_id)
                 REFERENCES concepts(id)
                 ON DELETE CASCADE
+        )
+    """)
+
+    cursor.execute("PRAGMA table_info(engineering_parameter_sets)")
+    engineering_parameter_columns = [row[1] for row in cursor.fetchall()]
+    if "source_language" not in engineering_parameter_columns:
+        cursor.execute(
+            "ALTER TABLE engineering_parameter_sets ADD COLUMN source_language TEXT"
+        )
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS engineering_parameter_translations (
+            concept_id INTEGER NOT NULL,
+            language_code TEXT NOT NULL,
+            translated_json TEXT NOT NULL CHECK (json_valid(translated_json)),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (concept_id, language_code),
+            FOREIGN KEY (concept_id) REFERENCES concepts(id) ON DELETE CASCADE
         )
     """)
 
@@ -371,7 +391,18 @@ def get_engineering_parameter_set(concept_id):
     return value
 
 
-def save_engineering_parameter_set(concept_id, parameter_set):
+def get_engineering_parameter_set_source_language(concept_id):
+    """Return the source language recorded for an engineering parameter set."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT source_language FROM engineering_parameter_sets WHERE concept_id = ?",
+        (concept_id,),
+    ).fetchone()
+    conn.close()
+    return normalize_language(row[0] if row and row[0] else DEFAULT_LANGUAGE)
+
+
+def save_engineering_parameter_set(concept_id, parameter_set, source_language=None):
     """Atomically persist one structured parameter set for a concept."""
     serialized = json.dumps(parameter_set, ensure_ascii=False)
     parsed = json.loads(serialized)
@@ -382,13 +413,69 @@ def save_engineering_parameter_set(concept_id, parameter_set):
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO engineering_parameter_sets (concept_id, parameters_json)
-        VALUES (?, ?)
+        INSERT INTO engineering_parameter_sets (
+            concept_id, parameters_json, source_language
+        )
+        VALUES (?, ?, ?)
         ON CONFLICT(concept_id) DO UPDATE SET
             parameters_json = excluded.parameters_json,
+            source_language = COALESCE(
+                excluded.source_language,
+                engineering_parameter_sets.source_language
+            ),
             updated_at = CURRENT_TIMESTAMP
         """,
-        (concept_id, serialized),
+        (
+            concept_id,
+            serialized,
+            normalize_language(source_language) if source_language else None,
+        ),
+    )
+    cursor.execute(
+        "DELETE FROM engineering_parameter_translations WHERE concept_id = ?",
+        (concept_id,),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_engineering_parameter_translation(concept_id, language_code):
+    """Return a cached engineering parameter translation, if available."""
+    conn = get_connection()
+    row = conn.execute(
+        """
+        SELECT translated_json
+        FROM engineering_parameter_translations
+        WHERE concept_id = ? AND language_code = ?
+        """,
+        (concept_id, normalize_language(language_code)),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return None
+    value = json.loads(row[0])
+    if not isinstance(value, dict):
+        raise ValueError("Engineering parameter translation must be a JSON object")
+    return value
+
+
+def save_engineering_parameter_translation(concept_id, language_code, translated):
+    """Atomically cache one translated engineering parameter set."""
+    serialized = json.dumps(translated, ensure_ascii=False)
+    if not isinstance(json.loads(serialized), dict):
+        raise ValueError("Engineering parameter translation must be a JSON object")
+    conn = get_connection()
+    conn.execute(
+        """
+        INSERT INTO engineering_parameter_translations (
+            concept_id, language_code, translated_json
+        )
+        VALUES (?, ?, ?)
+        ON CONFLICT(concept_id, language_code) DO UPDATE SET
+            translated_json = excluded.translated_json,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (concept_id, normalize_language(language_code), serialized),
     )
     conn.commit()
     conn.close()
