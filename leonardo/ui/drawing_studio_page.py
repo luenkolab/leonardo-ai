@@ -398,6 +398,7 @@ def _general_arrangement_view_markup(
     title,
     missing_message,
     component_projections=(),
+    assembly_item_numbers=None,
 ):
     display = calculate_display_rectangle(view)
     safe_title = html.escape(title)
@@ -420,6 +421,7 @@ def _general_arrangement_view_markup(
     horizontal_label = html.escape(_measurement_label(view.horizontal))
     vertical_label = html.escape(_measurement_label(view.vertical))
     arrow_id = f"ga-arrow-{view.key}"
+    assembly_item_numbers = assembly_item_numbers or {}
     component_rectangles = []
     for projection in component_projections:
         if projection.out_of_envelope:
@@ -443,6 +445,16 @@ def _general_arrangement_view_markup(
             'fill="rgba(39, 125, 161, 0.24)" stroke="#277da1" '
             'stroke-width="1.2"/>'
         )
+        item_number = assembly_item_numbers.get(projection.component_key)
+        if item_number is not None:
+            component_rectangles.append(
+                f'<text data-assembly-item="{item_number}" '
+                f'x="{component_x + component_width / 2:.2f}" '
+                f'y="{component_y + component_height / 2:.2f}" '
+                'text-anchor="middle" dominant-baseline="central" '
+                'font-size="11" font-weight="700" fill="#173f55">'
+                f'{item_number}</text>'
+            )
     components_markup = "\n    ".join(component_rectangles)
 
     return f"""
@@ -503,13 +515,13 @@ def _orthographic_view_data(general_arrangement):
     )
 
 
-def _render_orthographic_views(general_arrangement, language):
+def _render_projected_views(view_data, language, assembly_item_numbers=None):
     missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
     outside_components = set()
     columns = st.columns(3)
     for column, (view, projections) in zip(
         columns,
-        _orthographic_view_data(general_arrangement),
+        view_data,
     ):
         outside_components.update(
             projection.component_name
@@ -523,6 +535,7 @@ def _render_orthographic_views(general_arrangement, language):
                     translate(f"drawing_studio.ga.{view.key}_view", language),
                     missing_message,
                     projections,
+                    assembly_item_numbers,
                 ),
                 unsafe_allow_html=True,
             )
@@ -530,6 +543,64 @@ def _render_orthographic_views(general_arrangement, language):
         st.warning(
             f"{translate('drawing_studio.ga.outside_envelope', language)} "
             f"{', '.join(sorted(outside_components))}"
+        )
+
+
+def _render_orthographic_views(general_arrangement, language):
+    _render_projected_views(
+        _orthographic_view_data(general_arrangement),
+        language,
+    )
+
+
+def _assembly_view_data(general_arrangement):
+    view_data = _orthographic_view_data(general_arrangement)
+    visible_keys = {
+        projection.component_key
+        for _view, projections in view_data
+        for projection in projections
+        if not projection.out_of_envelope
+    }
+    numbered_components = tuple(
+        (number, component)
+        for number, component in enumerate(
+            (
+                component
+                for component in general_arrangement.components
+                if component.key in visible_keys
+            ),
+            start=1,
+        )
+    )
+    return view_data, numbered_components
+
+
+def _assembly_legend_markup(numbered_components, title):
+    items = "".join(
+        f"<div>{number} — {html.escape(component.name)}</div>"
+        for number, component in numbered_components
+    )
+    return (
+        '<div style="border:1px solid rgba(73, 112, 140, 0.32); '
+        'border-radius:10px; padding:12px; margin-top:10px;">'
+        f'<div style="font-weight:650; margin-bottom:6px;">{html.escape(title)}</div>'
+        f"{items}</div>"
+    )
+
+
+def _render_assembly_drawings(general_arrangement, language):
+    view_data, numbered_components = _assembly_view_data(general_arrangement)
+    item_numbers = {
+        component.key: number for number, component in numbered_components
+    }
+    _render_projected_views(view_data, language, item_numbers)
+    if numbered_components:
+        st.markdown(
+            _assembly_legend_markup(
+                numbered_components,
+                translate("concept.system_components", language),
+            ),
+            unsafe_allow_html=True,
         )
 
 
@@ -654,7 +725,7 @@ def render_drawing_studio():
         with package_columns[index % 2]:
             if item == "general_arrangement":
                 package_content = general_arrangement_status
-            elif item == "orthographic_views":
+            elif item in {"orthographic_views", "assembly_drawings"}:
                 package_content = " · ".join(
                     translate(f"drawing_studio.ga.{key}_view", language)
                     for key in ("front", "top", "side")
@@ -683,6 +754,11 @@ def render_drawing_studio():
                 )
             elif item == "orthographic_views":
                 _render_orthographic_views(
+                    general_arrangement,
+                    language,
+                )
+            elif item == "assembly_drawings":
+                _render_assembly_drawings(
                     general_arrangement,
                     language,
                 )

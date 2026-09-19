@@ -66,6 +66,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     component_input_renders = []
     arrangement_view_renders = []
     orthographic_view_renders = []
+    assembly_drawing_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -129,6 +130,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_orthographic_views",
         lambda *args: orthographic_view_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_assembly_drawings",
+        lambda *args: assembly_drawing_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -218,12 +224,15 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert package_results["Orthographic Views"] == (
         "Front View · Top View · Side View"
     )
+    assert package_results["Assembly Drawings"] == (
+        "Front View · Top View · Side View"
+    )
     assert set(package_results.values()) == {
         "Additional geometry data required",
         "Front View · Top View · Side View",
         "Not generated",
     }
-    assert list(package_results.values()).count("Not generated") == 4
+    assert list(package_results.values()).count("Not generated") == 3
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
@@ -235,6 +244,9 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert len(orthographic_view_renders) == 1
     assert orthographic_view_renders[0][0] is arrangement_view_renders[0][0]
     assert orthographic_view_renders[0][1] == "en"
+    assert len(assembly_drawing_renders) == 1
+    assert assembly_drawing_renders[0][0] is arrangement_view_renders[0][0]
+    assert assembly_drawing_renders[0][1] == "en"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -312,9 +324,9 @@ def test_general_arrangement_svg_uses_envelope_scale_for_complete_components():
     assert 'width="44.00" height="22.00"' in markup
 
 
-def _orthographic_arrangement(component_geometry):
+def _orthographic_arrangement(component_geometry, component_names=None):
     return drawing_studio_page.build_general_arrangement(
-        {"system_components": list(component_geometry)},
+        {"system_components": component_names or list(component_geometry)},
         {
             "universal": [
                 {
@@ -424,3 +436,91 @@ def test_orthographic_views_do_not_mix_concepts():
 
     assert first_keys == {"first"}
     assert second_keys == {"second"}
+
+
+def test_assembly_views_reuse_orthographic_projections_and_stable_numbering():
+    arrangement = _orthographic_arrangement(
+        {
+            "main_frame": _component_geometry(),
+            "incomplete": _component_geometry(
+                width=None, height=None, y=None, z=None
+            ),
+            "drive_unit": _component_geometry(x="300"),
+        },
+        ["Main Frame", "Incomplete", "Drive Unit"],
+    )
+    original_values = arrangement.model_dump()
+
+    assembly_views, numbered_components = drawing_studio_page._assembly_view_data(
+        arrangement
+    )
+
+    assert assembly_views == drawing_studio_page._orthographic_view_data(arrangement)
+    assert [view.key for view, _projections in assembly_views] == [
+        "front",
+        "top",
+        "side",
+    ]
+    assert [
+        (number, component.key) for number, component in numbered_components
+    ] == [(1, "main_frame"), (2, "drive_unit")]
+    assert numbered_components == drawing_studio_page._assembly_view_data(
+        arrangement
+    )[1]
+    assert arrangement.model_dump() == original_values
+
+
+def test_assembly_markers_and_legend_omit_unrenderable_components():
+    arrangement = _orthographic_arrangement(
+        {
+            "main_frame": _component_geometry(),
+            "incomplete": _component_geometry(
+                width=None, height=None, y=None, z=None
+            ),
+            "outside": _component_geometry(
+                length="100", x="950", y="450", z="360"
+            ),
+        },
+        ["Main Frame", "Incomplete", "Outside"],
+    )
+    view_data, numbered_components = drawing_studio_page._assembly_view_data(
+        arrangement
+    )
+    item_numbers = {
+        component.key: number for number, component in numbered_components
+    }
+    top, projections = view_data[1]
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+        item_numbers,
+    )
+    legend = drawing_studio_page._assembly_legend_markup(
+        numbered_components,
+        "System Components",
+    )
+
+    assert 'data-assembly-item="1"' in markup
+    assert 'data-component-key="incomplete"' not in markup
+    assert 'data-component-key="outside"' not in markup
+    assert "1 — Main Frame" in legend
+    assert "Incomplete" not in legend
+    assert "Outside" not in legend
+
+
+def test_assembly_numbering_does_not_mix_concepts():
+    first = _orthographic_arrangement({"first": _component_geometry()})
+    second = _orthographic_arrangement({"second": _component_geometry()})
+
+    _first_views, first_components = drawing_studio_page._assembly_view_data(first)
+    _second_views, second_components = drawing_studio_page._assembly_view_data(second)
+
+    assert [(number, component.key) for number, component in first_components] == [
+        (1, "first")
+    ]
+    assert [(number, component.key) for number, component in second_components] == [
+        (1, "second")
+    ]
