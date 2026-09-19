@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from decimal import Decimal
 
 from application.images import MODERN_CONCEPT_IMAGE_TYPES
 from services import concept_service, image_service
@@ -64,6 +65,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     envelope_input_renders = []
     component_input_renders = []
     arrangement_view_renders = []
+    orthographic_view_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -122,6 +124,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_general_arrangement_views",
         lambda *args: arrangement_view_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_orthographic_views",
+        lambda *args: orthographic_view_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -208,11 +215,15 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert package_results["General Arrangement"] == (
         "Additional geometry data required"
     )
+    assert package_results["Orthographic Views"] == (
+        "Front View · Top View · Side View"
+    )
     assert set(package_results.values()) == {
         "Additional geometry data required",
+        "Front View · Top View · Side View",
         "Not generated",
     }
-    assert list(package_results.values()).count("Not generated") == 5
+    assert list(package_results.values()).count("Not generated") == 4
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
@@ -221,6 +232,9 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert component_input_renders[0][2] == "en"
     assert len(arrangement_view_renders) == 1
     assert arrangement_view_renders[0][1] == "en"
+    assert len(orthographic_view_renders) == 1
+    assert orthographic_view_renders[0][0] is arrangement_view_renders[0][0]
+    assert orthographic_view_renders[0][1] == "en"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -296,3 +310,117 @@ def test_general_arrangement_svg_uses_envelope_scale_for_complete_components():
 
     assert 'data-component-key="frame"' in markup
     assert 'width="44.00" height="22.00"' in markup
+
+
+def _orthographic_arrangement(component_geometry):
+    return drawing_studio_page.build_general_arrangement(
+        {"system_components": list(component_geometry)},
+        {
+            "universal": [
+                {
+                    "key": "overall_dimensions_envelope",
+                    "value": "length=1000; width=500; height=400",
+                    "unit": "mm",
+                    "source": "user",
+                }
+            ],
+            "project_specific": [],
+            "component_geometry": component_geometry,
+        },
+    )
+
+
+def _component_geometry(**overrides):
+    geometry = {
+        "length": "200",
+        "width": "100",
+        "height": "50",
+        "x": "20",
+        "y": "30",
+        "z": "40",
+        "unit": "mm",
+    }
+    geometry.update(overrides)
+    return geometry
+
+
+def test_orthographic_views_reuse_ga_axes_positions_and_real_dimensions():
+    arrangement = _orthographic_arrangement({"frame": _component_geometry()})
+    original_values = arrangement.model_dump()
+
+    orthographic = drawing_studio_page._orthographic_view_data(arrangement)
+
+    assert [view.key for view, _projections in orthographic] == [
+        "front",
+        "top",
+        "side",
+    ]
+    assert [
+        (view.horizontal_axis, view.vertical_axis)
+        for view, _projections in orthographic
+    ] == [("width", "height"), ("length", "width"), ("length", "height")]
+    assert [
+        (
+            projections[0].horizontal_position.value,
+            projections[0].vertical_position.value,
+        )
+        for _view, projections in orthographic
+    ] == [
+        (Decimal("30"), Decimal("40")),
+        (Decimal("20"), Decimal("30")),
+        (Decimal("20"), Decimal("40")),
+    ]
+    assert all(
+        projections
+        == drawing_studio_page.build_component_projections(arrangement, view)
+        for view, projections in orthographic
+    )
+    assert arrangement.model_dump() == original_values
+
+
+def test_orthographic_svg_omits_incomplete_and_out_of_envelope_components():
+    arrangement = _orthographic_arrangement(
+        {
+            "visible": _component_geometry(),
+            "incomplete": _component_geometry(
+                length="100", width=None, height=None, x="0", y=None, z=None
+            ),
+            "outside": _component_geometry(length="100", x="950", y="0", z="0"),
+        }
+    )
+    top, projections = drawing_studio_page._orthographic_view_data(arrangement)[1]
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+    )
+
+    assert 'data-component-key="visible"' in markup
+    assert 'data-component-key="incomplete"' not in markup
+    assert 'data-component-key="outside"' not in markup
+    assert next(
+        item for item in projections if item.component_key == "outside"
+    ).out_of_envelope is True
+
+
+def test_orthographic_views_do_not_mix_concepts():
+    first = _orthographic_arrangement({"first": _component_geometry()})
+    second = _orthographic_arrangement(
+        {"second": _component_geometry(x="10", y="10", z="10")}
+    )
+
+    first_keys = {
+        projection.component_key
+        for _view, projections in drawing_studio_page._orthographic_view_data(first)
+        for projection in projections
+    }
+    second_keys = {
+        projection.component_key
+        for _view, projections in drawing_studio_page._orthographic_view_data(second)
+        for projection in projections
+    }
+
+    assert first_keys == {"first"}
+    assert second_keys == {"second"}

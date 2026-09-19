@@ -495,6 +495,44 @@ def _render_general_arrangement_views(general_arrangement, language):
         )
 
 
+def _orthographic_view_data(general_arrangement):
+    views = {view.key: view for view in build_envelope_views(general_arrangement)}
+    return tuple(
+        (views[key], build_component_projections(general_arrangement, views[key]))
+        for key in ("front", "top", "side")
+    )
+
+
+def _render_orthographic_views(general_arrangement, language):
+    missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
+    outside_components = set()
+    columns = st.columns(3)
+    for column, (view, projections) in zip(
+        columns,
+        _orthographic_view_data(general_arrangement),
+    ):
+        outside_components.update(
+            projection.component_name
+            for projection in projections
+            if projection.out_of_envelope
+        )
+        with column:
+            st.markdown(
+                _general_arrangement_view_markup(
+                    view,
+                    translate(f"drawing_studio.ga.{view.key}_view", language),
+                    missing_message,
+                    projections,
+                ),
+                unsafe_allow_html=True,
+            )
+    if outside_components:
+        st.warning(
+            f"{translate('drawing_studio.ga.outside_envelope', language)} "
+            f"{', '.join(sorted(outside_components))}"
+        )
+
+
 def render_drawing_studio():
     language = get_current_language()
     concept_id = get_current_concept_id()
@@ -614,13 +652,18 @@ def render_drawing_studio():
     package_columns = st.columns(2)
     for index, item in enumerate(package_items):
         with package_columns[index % 2]:
+            if item == "general_arrangement":
+                package_content = general_arrangement_status
+            elif item == "orthographic_views":
+                package_content = " · ".join(
+                    translate(f"drawing_studio.ga.{key}_view", language)
+                    for key in ("front", "top", "side")
+                )
+            else:
+                package_content = translate("drawing_studio.not_generated", language)
             render_result_box(
                 translate(f"drawing_studio.{item}", language),
-                (
-                    general_arrangement_status
-                    if item == "general_arrangement"
-                    else translate("drawing_studio.not_generated", language)
-                ),
+                package_content,
                 visual_variant="blue",
             )
             if item == "general_arrangement":
@@ -635,6 +678,11 @@ def render_drawing_studio():
                     language,
                 )
                 _render_general_arrangement_views(
+                    general_arrangement,
+                    language,
+                )
+            elif item == "orthographic_views":
+                _render_orthographic_views(
                     general_arrangement,
                     language,
                 )
