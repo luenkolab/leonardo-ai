@@ -156,54 +156,6 @@ def merge_project_suggestions(parameter_set, suggestions):
     }
 
 
-def calculate_readiness(parameter_set):
-    normalized = validate_parameter_set(parameter_set)
-    parameters = normalized["universal"] + normalized["project_specific"]
-    resolved = sum(
-        parameter["status"] in {"confirmed", "not_applicable"}
-        for parameter in parameters
-    )
-    if resolved == len(parameters):
-        return "ready"
-    if resolved:
-        return "partial"
-    return "incomplete"
-
-
-def update_parameter(
-    parameter_set,
-    group_name,
-    parameter_key,
-    value,
-    unit,
-    action,
-):
-    if group_name not in {"universal", "project_specific"}:
-        raise ValueError("Unsupported engineering parameter group")
-    if action not in {"edit", "confirm", "not_applicable"}:
-        raise ValueError("Unsupported engineering parameter action")
-    updated = validate_parameter_set(parameter_set)
-    normalized_key = normalize_parameter_key(parameter_key)
-    try:
-        target = next(
-            item for item in updated[group_name] if item["key"] == normalized_key
-        )
-    except StopIteration as exc:
-        raise ValueError("Engineering parameter does not exist") from exc
-    target["value"] = _optional_text(value)
-    target["unit"] = _optional_text(unit)
-    if action == "not_applicable":
-        target["status"] = "not_applicable"
-        target["source"] = "user"
-    elif action == "confirm":
-        target["status"] = "confirmed"
-        if group_name == "universal" or target["source"] != "ai":
-            target["source"] = "user"
-    else:
-        target["source"] = "user"
-    return updated
-
-
 def suggest_project_parameters(
     concept_data,
     category,

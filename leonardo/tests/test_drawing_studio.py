@@ -61,6 +61,8 @@ def test_studio_uses_current_concept_and_only_modern_references(
     headings = []
     spaces = []
     engineering_parameter_renders = []
+    envelope_input_renders = []
+    arrangement_view_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -99,6 +101,21 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_engineering_parameters",
         lambda *args: engineering_parameter_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "get_engineering_parameter_set",
+        lambda _concept_id: None,
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_overall_envelope_inputs",
+        lambda *args: envelope_input_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_general_arrangement_views",
+        lambda *args: arrangement_view_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -169,4 +186,64 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert engineering_parameter_renders == [
         (91, valid_concept, "robotics_automation", "en")
     ]
-    assert rendered_contents.count("Not generated") == 6
+    package_results = {
+        title: content
+        for title, content, _kwargs in result_boxes
+        if title
+        in {
+            "General Arrangement",
+            "Orthographic Views",
+            "Assembly Drawings",
+            "Component / Detail Drawings",
+            "Connections & Fasteners",
+            "Bill of Materials",
+        }
+    }
+    assert package_results["General Arrangement"] == (
+        "Additional geometry data required"
+    )
+    assert set(package_results.values()) == {
+        "Additional geometry data required",
+        "Not generated",
+    }
+    assert list(package_results.values()).count("Not generated") == 5
+    assert len(envelope_input_renders) == 1
+    assert envelope_input_renders[0][0] == 91
+    assert envelope_input_renders[0][2] == "en"
+    assert len(arrangement_view_renders) == 1
+    assert arrangement_view_renders[0][1] == "en"
+
+
+def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
+    complete = drawing_studio_page.build_general_arrangement(
+        {"system_components": []},
+        {
+            "universal": [
+                {
+                    "key": "overall_dimensions_envelope",
+                    "value": "length=1200; width=800",
+                    "unit": "mm",
+                    "source": "user",
+                }
+            ],
+            "project_specific": [],
+        },
+    )
+    top, front, _side = drawing_studio_page.build_envelope_views(complete)
+
+    top_markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+    )
+    front_markup = drawing_studio_page._general_arrangement_view_markup(
+        front,
+        "Front View",
+        "Missing geometry",
+    )
+
+    assert "<rect" in top_markup
+    assert ">1200 mm<" in top_markup
+    assert ">800 mm<" in top_markup
+    assert "<rect" not in front_markup
+    assert "Missing geometry" in front_markup

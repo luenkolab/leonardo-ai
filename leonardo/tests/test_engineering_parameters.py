@@ -79,20 +79,13 @@ def test_parameter_sets_persist_by_concept_without_changing_original(
     assert database.get_concept_by_id(first_id) == original
 
 
-def test_universal_core_is_generic_and_supports_missing_and_not_applicable():
+def test_universal_core_is_generic_and_starts_missing():
     parameter_set = service.build_empty_parameter_set()
     keys = {item["key"] for item in parameter_set["universal"]}
 
     assert len(keys) == 12
     assert not any("bridge" in key or "river" in key for key in keys)
     assert all(item["status"] == "missing" for item in parameter_set["universal"])
-    assert service.calculate_readiness(parameter_set) == "incomplete"
-
-    parameter_set["universal"][0]["status"] = "confirmed"
-    assert service.calculate_readiness(parameter_set) == "partial"
-    for item in parameter_set["universal"]:
-        item["status"] = "not_applicable"
-    assert service.calculate_readiness(parameter_set) == "ready"
 
 
 def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
@@ -101,14 +94,8 @@ def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
         _project_parameter("payload", "25 kg", "confirmed", "ai"),
         _project_parameter("operating_cycle", "AI cycle", "suggested", "ai"),
     ]
-    parameter_set = service.update_parameter(
-        parameter_set,
-        "project_specific",
-        "operating_cycle",
-        "User cycle",
-        None,
-        "edit",
-    )
+    parameter_set["project_specific"][1]["value"] = "User cycle"
+    parameter_set["project_specific"][1]["source"] = "user"
     suggestions = [
         _project_parameter("payload", "40 kg", "suggested"),
         _project_parameter("operating_cycle", "AI cycle", "suggested"),
@@ -132,32 +119,6 @@ def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
     assert list(item["key"] for item in merged["project_specific"]).count("reach") == 1
     assert "alternate_reach_key" not in by_key
     assert "unit_system" not in by_key
-
-
-def test_confirm_and_not_applicable_actions_update_readiness():
-    parameter_set = service.build_empty_parameter_set()
-    first_key = parameter_set["universal"][0]["key"]
-    parameter_set = service.update_parameter(
-        parameter_set,
-        "universal",
-        first_key,
-        "SI",
-        None,
-        "confirm",
-    )
-    assert parameter_set["universal"][0]["status"] == "confirmed"
-    assert service.calculate_readiness(parameter_set) == "partial"
-
-    for parameter in list(parameter_set["universal"])[1:]:
-        parameter_set = service.update_parameter(
-            parameter_set,
-            "universal",
-            parameter["key"],
-            None,
-            None,
-            "not_applicable",
-        )
-    assert service.calculate_readiness(parameter_set) == "ready"
 
 
 def test_ai_suggestion_uses_shared_client_once_and_returns_structured_data(
@@ -483,7 +444,7 @@ def test_all_engineering_parameter_ui_keys_exist_for_all_languages():
         for key in TRANSLATIONS["en"]
         if key.startswith("engineering_parameters.")
     }
-    assert len(keys) == 37
+    assert len(keys) == 34
     assert all(keys <= set(TRANSLATIONS[language]) for language in LANGUAGES)
 
 
