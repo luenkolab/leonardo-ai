@@ -1,3 +1,4 @@
+import copy
 from contextlib import nullcontext
 from decimal import Decimal
 
@@ -69,6 +70,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assembly_drawing_renders = []
     component_detail_renders = []
     connection_renders = []
+    bom_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -147,6 +149,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_connections_fasteners",
         lambda *args: connection_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_bill_of_materials",
+        lambda *args: bom_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -241,14 +248,14 @@ def test_studio_uses_current_concept_and_only_modern_references(
     )
     assert package_results["Component / Detail Drawings"] == "System Components"
     assert package_results["Connections & Fasteners"] == "Component A ↔ Component B"
+    assert package_results["Bill of Materials"] == "System Components"
     assert set(package_results.values()) == {
         "Additional geometry data required",
         "Front View · Top View · Side View",
         "System Components",
         "Component A ↔ Component B",
-        "Not generated",
     }
-    assert list(package_results.values()).count("Not generated") == 1
+    assert "Not generated" not in package_results.values()
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
@@ -271,6 +278,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert connection_renders[0][1] is arrangement_view_renders[0][0]
     assert connection_renders[0][2] == []
     assert connection_renders[0][3] == "en"
+    assert len(bom_renders) == 1
+    assert bom_renders[0][0] is arrangement_view_renders[0][0]
+    assert bom_renders[0][1] is valid_concept
+    assert bom_renders[0][2] == []
+    assert bom_renders[0][3] == "en"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -674,3 +686,102 @@ def test_connection_presentation_shows_only_saved_optional_fields():
     assert "Fastener Type" not in minimal_markup
     assert "Quantity" not in minimal_markup
     assert "Note" not in minimal_markup
+
+
+def _bom_arrangement(concept_data):
+    return drawing_studio_page.build_general_arrangement(
+        concept_data,
+        {"universal": [], "project_specific": [], "component_geometry": {}},
+    )
+
+
+def test_bom_uses_component_order_explicit_materials_and_related_connections():
+    concept_data = {
+        "system_components": [
+            {
+                "key": "main_frame",
+                "name": "Main Frame",
+                "material": "Structural steel",
+                "note": "Prefabricated",
+            },
+            {"key": "safety_cover", "name": "Safety Cover"},
+            {
+                "key": "sensor",
+                "name": "Sensor",
+                "material": "Polymer housing",
+            },
+        ],
+        "materials": ["Unassigned project material"],
+    }
+    connections = [
+        {
+            "component_a": "main_frame",
+            "component_b": "safety_cover",
+            "connection_type": "Bolted",
+            "fastener_type": "M8 bolt",
+            "quantity": 4,
+            "note": "Removable guard",
+        },
+        {
+            "component_a": "safety_cover",
+            "component_b": "sensor",
+            "connection_type": "Clipped",
+            "fastener_type": None,
+            "quantity": None,
+            "note": None,
+        },
+    ]
+    arrangement = _bom_arrangement(concept_data)
+    original_arrangement = arrangement.model_dump()
+    original_concept = copy.deepcopy(concept_data)
+    original_connections = copy.deepcopy(connections)
+
+    rows = drawing_studio_page._build_bom_rows(
+        arrangement,
+        concept_data,
+        connections,
+    )
+
+    assert [(row["item"], row["component"], row["quantity"]) for row in rows] == [
+        (1, "Main Frame", 1),
+        (2, "Safety Cover", 1),
+        (3, "Sensor", 1),
+    ]
+    assert rows[0]["material"] == "Structural steel"
+    assert rows[1]["material"] is None
+    assert rows[2]["material"] == "Polymer housing"
+    assert rows[0]["connections"] == ("Bolted · M8 bolt · ×4 · ↔ Safety Cover",)
+    assert all("Clipped" not in value for value in rows[0]["connections"])
+    assert rows[2]["connections"] == ("Clipped · ↔ Safety Cover",)
+    assert rows[0]["notes"] == ("Prefabricated", "Removable guard")
+    assert arrangement.model_dump() == original_arrangement
+    assert concept_data == original_concept
+    assert connections == original_connections
+
+
+def test_bom_keeps_duplicate_components_separate_and_concepts_isolated():
+    first = _bom_arrangement({"system_components": ["Bracket", "Bracket"]})
+    second = _bom_arrangement({"system_components": ["Motor"]})
+
+    first_rows = drawing_studio_page._build_bom_rows(first, {}, [])
+    second_rows = drawing_studio_page._build_bom_rows(second, {}, [])
+
+    assert [(row["item"], row["component_key"]) for row in first_rows] == [
+        (1, "bracket"),
+        (2, "bracket_2"),
+    ]
+    assert [(row["item"], row["component_key"]) for row in second_rows] == [
+        (1, "motor")
+    ]
+
+
+def test_bom_markup_uses_saved_rows_without_inventing_missing_material():
+    arrangement = _bom_arrangement({"system_components": ["Frame"]})
+    rows = drawing_studio_page._build_bom_rows(arrangement, {}, [])
+
+    markup = drawing_studio_page._bom_markup(rows, "en")
+
+    assert "<th>Item</th>" in markup
+    assert "<th>Fasteners / Connections</th>" in markup
+    assert "<td>Frame</td>" in markup
+    assert "Unassigned" not in markup

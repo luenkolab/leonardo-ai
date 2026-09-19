@@ -143,6 +143,11 @@ def test_drawing_studio_screen_is_translated_in_every_language():
         "drawing_studio.connections.invalid",
         "drawing_studio.connections.requires_two_components",
         "drawing_studio.bill_of_materials",
+        "drawing_studio.bom.item",
+        "drawing_studio.bom.component",
+        "drawing_studio.bom.material",
+        "drawing_studio.bom.fasteners_connections",
+        "drawing_studio.bom.notes",
         "drawing_studio.not_generated",
     )
     english = {key: translate(key, "en") for key in keys}

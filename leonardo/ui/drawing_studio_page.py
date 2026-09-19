@@ -746,6 +746,121 @@ def _render_connections_fasteners(
             )
 
 
+def _structured_component_metadata(concept_data, components):
+    source_components = []
+    for item in concept_data.get("system_components", []):
+        if isinstance(item, str) and item.strip():
+            source_components.append(item)
+        elif isinstance(item, dict) and str(item.get("name") or "").strip():
+            source_components.append(item)
+
+    metadata = {}
+    for component, source in zip(components, source_components):
+        if not isinstance(source, dict):
+            continue
+        metadata[component.key] = {
+            field: (
+                " ".join(source[field].split())
+                if isinstance(source.get(field), str) and source[field].strip()
+                else None
+            )
+            for field in ("material", "note")
+        }
+    return metadata
+
+
+def _build_bom_rows(general_arrangement, concept_data, connections):
+    component_names = {
+        component.key: component.name for component in general_arrangement.components
+    }
+    metadata = _structured_component_metadata(
+        concept_data,
+        general_arrangement.components,
+    )
+    rows = []
+    for item_number, component in enumerate(general_arrangement.components, start=1):
+        connection_summaries = []
+        notes = []
+        component_metadata = metadata.get(component.key, {})
+        if component_metadata.get("note"):
+            notes.append(component_metadata["note"])
+        for connection in connections:
+            if component.key not in {
+                connection["component_a"],
+                connection["component_b"],
+            }:
+                continue
+            other_key = (
+                connection["component_b"]
+                if connection["component_a"] == component.key
+                else connection["component_a"]
+            )
+            if other_key not in component_names:
+                continue
+            summary = [connection["connection_type"]]
+            if connection["fastener_type"]:
+                summary.append(connection["fastener_type"])
+            if connection["quantity"] is not None:
+                summary.append(f"×{connection['quantity']}")
+            summary.append(f"↔ {component_names[other_key]}")
+            connection_summaries.append(" · ".join(summary))
+            if connection["note"]:
+                notes.append(connection["note"])
+        rows.append(
+            {
+                "item": item_number,
+                "component_key": component.key,
+                "component": component.name,
+                "quantity": 1,
+                "material": component_metadata.get("material"),
+                "connections": tuple(connection_summaries),
+                "notes": tuple(notes),
+            }
+        )
+    return tuple(rows)
+
+
+def _bom_markup(rows, language):
+    headings = (
+        translate("drawing_studio.bom.item", language),
+        translate("drawing_studio.bom.component", language),
+        translate("drawing_studio.connections.quantity", language),
+        translate("drawing_studio.bom.material", language),
+        translate("drawing_studio.bom.fasteners_connections", language),
+        translate("drawing_studio.bom.notes", language),
+    )
+    header_markup = "".join(f"<th>{html.escape(label)}</th>" for label in headings)
+    row_markup = "".join(
+        "<tr>"
+        f"<td>{row['item']}</td>"
+        f"<td>{html.escape(row['component'])}</td>"
+        f"<td>{row['quantity']}</td>"
+        f"<td>{html.escape(row['material'] or '')}</td>"
+        f"<td>{'<br>'.join(html.escape(value) for value in row['connections'])}</td>"
+        f"<td>{'<br>'.join(html.escape(value) for value in row['notes'])}</td>"
+        "</tr>"
+        for row in rows
+    )
+    return f"""
+<div style="overflow-x:auto; margin-top:10px;">
+  <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+    <thead><tr>{header_markup}</tr></thead>
+    <tbody>{row_markup}</tbody>
+  </table>
+</div>
+"""
+
+
+def _render_bill_of_materials(general_arrangement, concept_data, connections, language):
+    st.markdown(
+        _bom_markup(
+            _build_bom_rows(general_arrangement, concept_data, connections),
+            language,
+        ),
+        unsafe_allow_html=True,
+    )
+
+
 def render_drawing_studio():
     language = get_current_language()
     concept_id = get_current_concept_id()
@@ -877,6 +992,8 @@ def render_drawing_studio():
                     f"{translate('drawing_studio.connections.component_a', language)} "
                     f"↔ {translate('drawing_studio.connections.component_b', language)}"
                 )
+            elif item == "bill_of_materials":
+                package_content = translate("concept.system_components", language)
             else:
                 package_content = translate("drawing_studio.not_generated", language)
             render_result_box(
@@ -918,6 +1035,13 @@ def render_drawing_studio():
                 _render_connections_fasteners(
                     concept_id,
                     general_arrangement,
+                    parameter_set["connections"],
+                    language,
+                )
+            elif item == "bill_of_materials":
+                _render_bill_of_materials(
+                    general_arrangement,
+                    concept_data,
                     parameter_set["connections"],
                     language,
                 )
