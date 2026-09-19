@@ -88,6 +88,45 @@ def test_universal_core_is_generic_and_starts_missing():
     assert all(item["status"] == "missing" for item in parameter_set["universal"])
 
 
+def test_component_geometry_survives_validation_save_and_load(
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Geometry contract")
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["universal"][0]["value"] = "SI"
+    parameter_set["project_specific"] = [_project_parameter("payload", "25")]
+    parameter_set["component_geometry"] = {
+        "main-frame": {
+            "length": "1.2",
+            "width": None,
+            "height": "0.6",
+            "x": "0",
+            "y": None,
+            "z": "25",
+            "unit": "M",
+        }
+    }
+    parameter_set["unknown_top_level"] = "discarded"
+
+    validated = service.validate_parameter_set(parameter_set)
+    database.save_engineering_parameter_set(concept_id, validated)
+    loaded = database.get_engineering_parameter_set(concept_id)
+
+    assert loaded["component_geometry"]["main_frame"] == {
+        "length": "1.2",
+        "width": None,
+        "height": "0.6",
+        "x": "0",
+        "y": None,
+        "z": "25",
+        "unit": "m",
+    }
+    assert loaded["universal"][0]["value"] == "SI"
+    assert loaded["project_specific"][0]["value"] == "25"
+    assert "unknown_top_level" not in loaded
+
+
 def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
     parameter_set = service.build_empty_parameter_set()
     parameter_set["project_specific"] = [

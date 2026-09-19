@@ -11,10 +11,12 @@ from i18n import normalize_language
 from services import concept_translation_service
 from services.engineering_parameters_service import (
     build_empty_parameter_set,
+    normalize_parameter_key,
     validate_parameter_set,
 )
 from services.general_arrangement_service import (
     SUPPORTED_LENGTH_UNITS,
+    normalize_known_value,
     normalize_length_value,
 )
 
@@ -121,5 +123,69 @@ def save_overall_envelope_values(concept_id, length, width, height, unit):
     parameter["unit"] = normalized_unit if values else None
     parameter["status"] = "confirmed" if values else "missing"
     parameter["source"] = "user"
+    save_engineering_parameter_set(concept_id, canonical)
+    return canonical
+
+
+def save_component_geometry_values(
+    concept_id,
+    component_key,
+    length,
+    width,
+    height,
+    x,
+    y,
+    z,
+    unit,
+):
+    """Store one component's explicit geometry without replacing its siblings."""
+    key = normalize_parameter_key(component_key)
+    normalized_unit = str(unit or "").strip().casefold()
+    if normalized_unit not in SUPPORTED_LENGTH_UNITS:
+        raise ValueError("Unsupported component geometry unit")
+
+    values = {}
+    source_prefix = f"component_geometry.{key}"
+    for field, raw_value in (
+        ("length", length),
+        ("width", width),
+        ("height", height),
+        ("x", x),
+        ("y", y),
+        ("z", z),
+    ):
+        value_text = "" if raw_value is None else str(raw_value).strip()
+        if not value_text:
+            values[field] = None
+            continue
+        normalized = normalize_known_value(
+            value_text,
+            normalized_unit,
+            source_type="engineering_parameter",
+            source_key=f"{source_prefix}.{field}",
+        )
+        minimum_is_valid = (
+            normalized is not None
+            and normalized.quantity == "length"
+            and (
+                normalized.value > 0
+                if field in {"length", "width", "height"}
+                else normalized.value >= 0
+            )
+        )
+        if not minimum_is_valid:
+            raise ValueError("Invalid component geometry value")
+        values[field] = value_text
+
+    canonical = validate_parameter_set(
+        get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
+    )
+    if any(values.values()):
+        canonical["component_geometry"][key] = {
+            **values,
+            "unit": normalized_unit,
+        }
+    else:
+        canonical["component_geometry"].pop(key, None)
     save_engineering_parameter_set(concept_id, canonical)
     return canonical

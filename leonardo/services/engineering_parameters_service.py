@@ -13,6 +13,8 @@ PARAMETER_STATUSES = {
     "not_applicable",
 }
 PARAMETER_SOURCES = {"user", "ai", "concept"}
+COMPONENT_GEOMETRY_FIELDS = ("length", "width", "height", "x", "y", "z")
+COMPONENT_GEOMETRY_UNITS = {"mm", "cm", "m"}
 
 UNIVERSAL_PARAMETER_DEFINITIONS = (
     ("unit_system", "Unit System"),
@@ -87,6 +89,7 @@ def build_empty_parameter_set():
     return {
         "universal": build_universal_parameters(),
         "project_specific": [],
+        "component_geometry": {},
     }
 
 
@@ -112,9 +115,29 @@ def validate_parameter_set(value):
     project_specific = value.get("project_specific")
     if not isinstance(universal, list) or not isinstance(project_specific, list):
         raise ValueError("Engineering parameter set must contain two arrays")
+    raw_component_geometry = value.get("component_geometry", {})
+    if not isinstance(raw_component_geometry, dict):
+        raise ValueError("Component geometry must be a JSON object")
+    component_geometry = {}
+    for raw_key, raw_geometry in raw_component_geometry.items():
+        key = normalize_parameter_key(raw_key)
+        if not isinstance(raw_geometry, dict):
+            raise ValueError(f"Component geometry must be an object for {key}")
+        geometry = {
+            field: _optional_text(raw_geometry.get(field))
+            for field in COMPONENT_GEOMETRY_FIELDS
+        }
+        if not any(geometry.values()):
+            continue
+        unit = _optional_text(raw_geometry.get("unit"))
+        if unit is None or unit.casefold() not in COMPONENT_GEOMETRY_UNITS:
+            raise ValueError(f"Unsupported component geometry unit for {key}")
+        geometry["unit"] = unit.casefold()
+        component_geometry[key] = geometry
     return {
         "universal": _deduplicate_parameters(universal, "user"),
         "project_specific": _deduplicate_parameters(project_specific, "ai"),
+        "component_geometry": component_geometry,
     }
 
 
@@ -153,6 +176,7 @@ def merge_project_suggestions(parameter_set, suggestions):
     return {
         "universal": current["universal"],
         "project_specific": merged,
+        "component_geometry": current["component_geometry"],
     }
 
 

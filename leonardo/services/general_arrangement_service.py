@@ -94,6 +94,16 @@ class DisplayRectangle(_StrictModel):
     scale: Decimal
 
 
+class ComponentProjection(_StrictModel):
+    component_key: str = Field(min_length=1)
+    component_name: str = Field(min_length=1)
+    horizontal_size: NormalizedValue
+    vertical_size: NormalizedValue
+    horizontal_position: NormalizedValue
+    vertical_position: NormalizedValue
+    out_of_envelope: bool
+
+
 def normalize_known_value(
     raw_value,
     raw_unit,
@@ -208,6 +218,8 @@ def _structured_measurement(value, axis, component_key, group_name):
         return None
     if group_name == "dimensions" and normalized.value <= 0:
         return None
+    if group_name == "position" and normalized.value < 0:
+        return None
     return normalized
 
 
@@ -244,7 +256,62 @@ def _structured_position(value, component_key):
     return Position(**coordinates)
 
 
-def _build_components(concept_data):
+def _stored_measurement(value, unit, field, component_key):
+    normalized = normalize_known_value(
+        value,
+        unit,
+        source_type="engineering_parameter",
+        source_key=f"component_geometry.{component_key}.{field}",
+    )
+    if normalized is None or normalized.quantity != "length":
+        return None
+    if field in {"length", "width", "height"} and normalized.value <= 0:
+        return None
+    if field in {"x", "y", "z"} and normalized.value < 0:
+        return None
+    return normalized
+
+
+def _stored_geometry(component_geometry, component_key):
+    geometry = component_geometry.get(component_key)
+    if not isinstance(geometry, dict):
+        return None
+    unit = geometry.get("unit")
+    dimensions = Dimensions(
+        **{
+            field: _stored_measurement(
+                geometry.get(field), unit, field, component_key
+            )
+            for field in ("length", "width", "height")
+        }
+    )
+    coordinates = {
+        field: _stored_measurement(geometry.get(field), unit, field, component_key)
+        for field in ("x", "y", "z")
+    }
+    position = Position(**coordinates) if any(coordinates.values()) else None
+    return dimensions, position
+
+
+def _merge_geometry(concept_dimensions, concept_position, stored):
+    stored_dimensions, stored_position = stored or (Dimensions(), None)
+    dimensions = Dimensions(
+        **{
+            field: getattr(stored_dimensions, field)
+            or getattr(concept_dimensions, field)
+            for field in ("length", "width", "height")
+        }
+    )
+    coordinates = {
+        field: (getattr(stored_position, field) if stored_position else None)
+        or (getattr(concept_position, field) if concept_position else None)
+        for field in ("x", "y", "z")
+    }
+    position = Position(**coordinates) if any(coordinates.values()) else None
+    return dimensions, position
+
+
+def _build_components(concept_data, component_geometry):
     raw_components = concept_data.get("system_components", [])
     if not isinstance(raw_components, list):
         return ()
@@ -257,7 +324,16 @@ def _build_components(concept_data):
             if not name:
                 continue
             key = _component_key(name, index, used_keys)
-            components.append(GeneralArrangementComponent(key=key, name=name))
+            stored = _stored_geometry(component_geometry, key)
+            dimensions, position = _merge_geometry(Dimensions(), None, stored)
+            components.append(
+                GeneralArrangementComponent(
+                    key=key,
+                    name=name,
+                    dimensions=dimensions,
+                    position=position,
+                )
+            )
             continue
 
         if not isinstance(item, dict):
@@ -266,12 +342,18 @@ def _build_components(concept_data):
         if not name:
             continue
         key = _component_key(item.get("key") or name, index, used_keys)
+        stored = _stored_geometry(component_geometry, key)
+        dimensions, position = _merge_geometry(
+            _structured_dimensions(item.get("dimensions"), key),
+            _structured_position(item.get("position"), key),
+            stored,
+        )
         components.append(
             GeneralArrangementComponent(
                 key=key,
                 name=name,
-                dimensions=_structured_dimensions(item.get("dimensions"), key),
-                position=_structured_position(item.get("position"), key),
+                dimensions=dimensions,
+                position=position,
             )
         )
     return tuple(components)
@@ -329,7 +411,10 @@ def build_general_arrangement(concept_data, parameter_set):
 
     return GeneralArrangement(
         overall_envelope=envelope,
-        components=_build_components(concept_data),
+        components=_build_components(
+            concept_data,
+            parameter_set.get("component_geometry", {}),
+        ),
         raw_inputs=tuple(raw_inputs),
     )
 
@@ -376,6 +461,51 @@ def calculate_display_rectangle(view, max_width=220, max_height=130):
         height=view.vertical.value * scale,
         scale=scale,
     )
+
+
+def build_component_projections(arrangement, view):
+    """Project only complete component geometry into a known envelope view."""
+    axis_map = {
+        "top": ("length", "width", "x", "y"),
+        "front": ("width", "height", "y", "z"),
+        "side": ("length", "height", "x", "z"),
+    }
+    horizontal_size, vertical_size, horizontal_position, vertical_position = (
+        axis_map[view.key]
+    )
+    projections = []
+    for component in arrangement.components:
+        if component.position is None:
+            continue
+        values = (
+            getattr(component.dimensions, horizontal_size),
+            getattr(component.dimensions, vertical_size),
+            getattr(component.position, horizontal_position),
+            getattr(component.position, vertical_position),
+        )
+        if not all(values):
+            continue
+        h_size, v_size, h_position, v_position = values
+        out_of_envelope = (
+            view.horizontal is not None
+            and view.vertical is not None
+            and (
+                h_position.value + h_size.value > view.horizontal.value
+                or v_position.value + v_size.value > view.vertical.value
+            )
+        )
+        projections.append(
+            ComponentProjection(
+                component_key=component.key,
+                component_name=component.name,
+                horizontal_size=h_size,
+                vertical_size=v_size,
+                horizontal_position=h_position,
+                vertical_position=v_position,
+                out_of_envelope=out_of_envelope,
+            )
+        )
+    return tuple(projections)
 
 
 def has_prepared_geometry(arrangement):

@@ -62,6 +62,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     spaces = []
     engineering_parameter_renders = []
     envelope_input_renders = []
+    component_input_renders = []
     arrangement_view_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
@@ -111,6 +112,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_overall_envelope_inputs",
         lambda *args: envelope_input_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_component_geometry_inputs",
+        lambda *args: component_input_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -210,6 +216,9 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
+    assert len(component_input_renders) == 1
+    assert component_input_renders[0][0] == 91
+    assert component_input_renders[0][2] == "en"
     assert len(arrangement_view_renders) == 1
     assert arrangement_view_renders[0][1] == "en"
 
@@ -247,3 +256,43 @@ def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
     assert ">800 mm<" in top_markup
     assert "<rect" not in front_markup
     assert "Missing geometry" in front_markup
+
+
+def test_general_arrangement_svg_uses_envelope_scale_for_complete_components():
+    arrangement = drawing_studio_page.build_general_arrangement(
+        {"system_components": ["Frame"]},
+        {
+            "universal": [
+                {
+                    "key": "overall_dimensions_envelope",
+                    "value": "length=1000; width=500; height=400",
+                    "unit": "mm",
+                    "source": "user",
+                }
+            ],
+            "project_specific": [],
+            "component_geometry": {
+                "frame": {
+                    "length": "200",
+                    "width": "100",
+                    "height": "50",
+                    "x": "100",
+                    "y": "50",
+                    "z": "0",
+                    "unit": "mm",
+                }
+            },
+        },
+    )
+    top = drawing_studio_page.build_envelope_views(arrangement)[0]
+    projections = drawing_studio_page.build_component_projections(arrangement, top)
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+    )
+
+    assert 'data-component-key="frame"' in markup
+    assert 'width="44.00" height="22.00"' in markup

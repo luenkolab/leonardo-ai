@@ -1,8 +1,13 @@
 from decimal import Decimal
 
 import database
-from application.engineering_parameters import save_overall_envelope_values
+from application.engineering_parameters import (
+    save_component_geometry_values,
+    save_overall_envelope_values,
+)
+from services.engineering_parameters_service import build_empty_parameter_set
 from services.general_arrangement_service import (
+    build_component_projections,
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
@@ -12,7 +17,11 @@ from services.general_arrangement_service import (
 
 
 def _parameter_set(*parameters):
-    return {"universal": list(parameters), "project_specific": []}
+    return {
+        "universal": list(parameters),
+        "project_specific": [],
+        "component_geometry": {},
+    }
 
 
 def _parameter(key, value, unit="mm", source="user"):
@@ -21,6 +30,21 @@ def _parameter(key, value, unit="mm", source="user"):
         "value": value,
         "unit": unit,
         "source": source,
+    }
+
+
+def _structured_component(dimensions=None, position=None):
+    return {
+        "key": "frame",
+        "name": "Frame",
+        "dimensions": {
+            field: {"value": str(value), "unit": "mm"}
+            for field, value in (dimensions or {}).items()
+        },
+        "position": {
+            field: {"value": str(value), "unit": "mm"}
+            for field, value in (position or {}).items()
+        },
     }
 
 
@@ -195,7 +219,6 @@ def test_overall_envelope_saves_in_existing_parameter_set_and_normalizes(
         valid_concept,
         "en",
     )
-
     save_overall_envelope_values(concept_id, "1.2", "0.8", "0.6", "m")
     stored = database.get_engineering_parameter_set(concept_id)
     parameter = next(
@@ -368,3 +391,246 @@ def test_envelope_views_from_different_concepts_do_not_mix():
     second_top = build_envelope_views(second)[0]
     assert first_top.horizontal.value == Decimal("100")
     assert second_top.horizontal.value == Decimal("900")
+
+
+def test_component_geometry_saves_by_stable_key_without_replacing_other_data(
+    temporary_database,
+    valid_concept,
+):
+    concept_id = database.save_concept(
+        "Component geometry",
+        "robotics_automation",
+        "Geometry prompt",
+        valid_concept,
+        "en",
+    )
+    existing = build_empty_parameter_set()
+    existing["universal"][0]["value"] = "SI"
+    existing["project_specific"] = [
+        {
+            "key": "payload",
+            "label": "Payload",
+            "value": "25",
+            "unit": "kg",
+            "status": "confirmed",
+            "source": "user",
+            "rationale": None,
+        }
+    ]
+    database.save_engineering_parameter_set(concept_id, existing)
+    save_component_geometry_values(
+        concept_id, "structural_frame", "1.2", "0.4", "0.3", "0", "10", "20", "m"
+    )
+    save_component_geometry_values(
+        concept_id, "control_unit", "50", "40", "30", "5", "6", "7", "cm"
+    )
+    stored = database.get_engineering_parameter_set(concept_id)
+
+    assert set(stored["component_geometry"]) == {"structural_frame", "control_unit"}
+    assert stored["component_geometry"]["structural_frame"]["length"] == "1.2"
+    assert len(stored["universal"]) == 12
+    assert stored["universal"][0]["value"] == "SI"
+    assert stored["project_specific"][0]["value"] == "25"
+
+
+def test_component_geometry_normalizes_partial_values_and_keeps_concepts_isolated(
+    temporary_database,
+    valid_concept,
+):
+    first_id = database.save_concept(
+        "First component", "robotics_automation", "First", valid_concept, "en"
+    )
+    second_id = database.save_concept(
+        "Second component", "robotics_automation", "Second", valid_concept, "en"
+    )
+    component_key = "structural_frame"
+    save_component_geometry_values(
+        first_id, component_key, "1.2", "", "30", "0", "", "2", "m"
+    )
+    save_component_geometry_values(
+        second_id, component_key, "25", "", "", "0", "", "", "cm"
+    )
+
+    first = build_general_arrangement(
+        {"system_components": ["Structural Frame"]},
+        database.get_engineering_parameter_set(first_id),
+    ).components[0]
+    second = build_general_arrangement(
+        {"system_components": ["Structural Frame"]},
+        database.get_engineering_parameter_set(second_id),
+    ).components[0]
+
+    assert first.dimensions.length.value == Decimal("1200.0")
+    assert first.dimensions.width is None
+    assert first.dimensions.height.value == Decimal("30000")
+    assert first.position.x.value == Decimal("0")
+    assert first.position.y is None
+    assert first.position.z.value == Decimal("2000")
+    assert first.dimensions.length.provenance.source_key == (
+        "component_geometry.structural_frame.length"
+    )
+    assert second.dimensions.length.value == Decimal("250")
+    assert second.dimensions.height is None
+
+
+def test_partial_stored_geometry_preserves_known_concept_dimensions():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {"frame": {"x": "100", "unit": "mm"}}
+
+    component = build_general_arrangement(
+        {
+            "system_components": [
+                _structured_component(
+                    dimensions={"length": 1000, "width": 500, "height": 300}
+                )
+            ]
+        },
+        parameter_set,
+    ).components[0]
+
+    assert component.dimensions.length.value == Decimal("1000")
+    assert component.dimensions.width.value == Decimal("500")
+    assert component.dimensions.height.value == Decimal("300")
+    assert component.position.x.value == Decimal("100")
+
+
+def test_partial_stored_dimensions_preserve_known_concept_position():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {
+        "frame": {"length": "800", "unit": "mm"}
+    }
+
+    component = build_general_arrangement(
+        {
+            "system_components": [
+                _structured_component(position={"x": 10, "y": 20, "z": 30})
+            ]
+        },
+        parameter_set,
+    ).components[0]
+
+    assert component.dimensions.length.value == Decimal("800")
+    assert component.position.x.value == Decimal("10")
+    assert component.position.y.value == Decimal("20")
+    assert component.position.z.value == Decimal("30")
+
+
+def test_stored_component_field_takes_priority_over_concept_data():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {
+        "frame": {"width": "650", "unit": "mm"}
+    }
+
+    component = build_general_arrangement(
+        {
+            "system_components": [
+                _structured_component(dimensions={"length": 1000, "width": 500})
+            ]
+        },
+        parameter_set,
+    ).components[0]
+
+    assert component.dimensions.length.value == Decimal("1000")
+    assert component.dimensions.width.value == Decimal("650")
+    assert component.dimensions.width.provenance.source_type == "engineering_parameter"
+
+
+def test_component_fields_absent_from_both_sources_remain_none():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {"frame": {"x": "0", "unit": "mm"}}
+
+    component = build_general_arrangement(
+        {"system_components": [_structured_component(dimensions={"length": 1000})]},
+        parameter_set,
+    ).components[0]
+
+    assert component.dimensions.width is None
+    assert component.dimensions.height is None
+    assert component.position.y is None
+    assert component.position.z is None
+
+
+def test_component_projections_use_view_axes_and_skip_incomplete_geometry():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=1200; width=800; height=600",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "400",
+            "width": "300",
+            "height": "200",
+            "x": "100",
+            "y": "50",
+            "z": "25",
+            "unit": "mm",
+        },
+        "incomplete": {
+            "length": "100",
+            "width": None,
+            "height": None,
+            "x": "0",
+            "y": None,
+            "z": None,
+            "unit": "mm",
+        },
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame", "Incomplete"]}, parameter_set
+    )
+    top, front, side = build_envelope_views(arrangement)
+    top_projection = build_component_projections(arrangement, top)
+    front_projection = build_component_projections(arrangement, front)
+    side_projection = build_component_projections(arrangement, side)
+
+    assert len(top_projection) == len(front_projection) == len(side_projection) == 1
+    assert (
+        top_projection[0].horizontal_size.value,
+        top_projection[0].vertical_size.value,
+        top_projection[0].horizontal_position.value,
+        top_projection[0].vertical_position.value,
+    ) == (Decimal("400"), Decimal("300"), Decimal("100"), Decimal("50"))
+    assert (
+        front_projection[0].horizontal_size.value,
+        front_projection[0].vertical_size.value,
+        front_projection[0].horizontal_position.value,
+        front_projection[0].vertical_position.value,
+    ) == (Decimal("300"), Decimal("200"), Decimal("50"), Decimal("25"))
+    assert (
+        side_projection[0].horizontal_size.value,
+        side_projection[0].vertical_size.value,
+        side_projection[0].horizontal_position.value,
+        side_projection[0].vertical_position.value,
+    ) == (Decimal("400"), Decimal("200"), Decimal("100"), Decimal("25"))
+
+
+def test_out_of_envelope_projection_is_flagged_without_changing_geometry():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=500; width=400; height=300",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "200",
+            "width": "100",
+            "height": "50",
+            "x": "400",
+            "y": "0",
+            "z": "0",
+            "unit": "mm",
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    projection = build_component_projections(
+        arrangement, build_envelope_views(arrangement)[0]
+    )[0]
+
+    assert projection.out_of_envelope is True
+    assert arrangement.components[0].position.x.value == Decimal("400")
+    assert arrangement.components[0].dimensions.length.value == Decimal("200")

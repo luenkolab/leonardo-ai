@@ -9,6 +9,7 @@ from application.concepts import (
 )
 from application.engineering_parameters import (
     load_engineering_parameters_for_viewer,
+    save_component_geometry_values,
     save_engineering_parameter_values,
     save_overall_envelope_values,
 )
@@ -27,6 +28,7 @@ from services.engineering_parameters_service import (
 )
 from services.general_arrangement_service import (
     SUPPORTED_LENGTH_UNITS,
+    build_component_projections,
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
@@ -314,7 +316,89 @@ def _measurement_label(measurement):
     return f"{value} {measurement.unit}"
 
 
-def _general_arrangement_view_markup(view, title, missing_message):
+def _render_component_geometry_inputs(concept_id, general_arrangement, language):
+    if not general_arrangement.components:
+        return
+    st.subheader(translate("drawing_studio.ga.component_geometry", language))
+    for component in general_arrangement.components:
+        st.markdown(f"**{html.escape(component.name)}**")
+        measurements = (
+            component.dimensions.length,
+            component.dimensions.width,
+            component.dimensions.height,
+            component.position.x if component.position else None,
+            component.position.y if component.position else None,
+            component.position.z if component.position else None,
+        )
+        current_unit = next(
+            (
+                measurement.raw_unit.casefold()
+                for measurement in measurements
+                if measurement is not None
+                and measurement.raw_unit.casefold() in SUPPORTED_LENGTH_UNITS
+            ),
+            SUPPORTED_LENGTH_UNITS[0],
+        )
+        dimension_columns = st.columns(4)
+        coordinate_columns = st.columns(3)
+        rendered = {}
+        for column, field, measurement in zip(
+            dimension_columns[:3],
+            ("length", "width", "height"),
+            measurements[:3],
+        ):
+            rendered[field] = column.text_input(
+                translate(f"drawing_studio.envelope.{field}", language),
+                value=measurement.raw_value if measurement else "",
+                key=f"ga_component_{concept_id}_{component.key}_{field}",
+            ).strip()
+        selected_unit = dimension_columns[3].selectbox(
+            translate("engineering_parameters.unit", language),
+            SUPPORTED_LENGTH_UNITS,
+            index=SUPPORTED_LENGTH_UNITS.index(current_unit),
+            key=f"ga_component_{concept_id}_{component.key}_unit",
+        )
+        for column, field, measurement in zip(
+            coordinate_columns,
+            ("x", "y", "z"),
+            measurements[3:],
+        ):
+            rendered[field] = column.text_input(
+                translate(f"drawing_studio.ga.position_{field}", language),
+                value=measurement.raw_value if measurement else "",
+                key=f"ga_component_{concept_id}_{component.key}_{field}",
+            ).strip()
+        if st.button(
+            translate("engineering_parameters.save", language),
+            key=f"ga_component_{concept_id}_{component.key}_save",
+            type="secondary",
+        ):
+            try:
+                save_component_geometry_values(
+                    concept_id,
+                    component.key,
+                    rendered["length"],
+                    rendered["width"],
+                    rendered["height"],
+                    rendered["x"],
+                    rendered["y"],
+                    rendered["z"],
+                    selected_unit,
+                )
+            except ValueError:
+                st.error(
+                    translate("drawing_studio.ga.invalid_component_geometry", language)
+                )
+            else:
+                st.rerun()
+
+
+def _general_arrangement_view_markup(
+    view,
+    title,
+    missing_message,
+    component_projections=(),
+):
     display = calculate_display_rectangle(view)
     safe_title = html.escape(title)
     if display is None:
@@ -336,6 +420,30 @@ def _general_arrangement_view_markup(view, title, missing_message):
     horizontal_label = html.escape(_measurement_label(view.horizontal))
     vertical_label = html.escape(_measurement_label(view.vertical))
     arrow_id = f"ga-arrow-{view.key}"
+    component_rectangles = []
+    for projection in component_projections:
+        if projection.out_of_envelope:
+            continue
+        component_width = float(projection.horizontal_size.value * display.scale)
+        component_height = float(projection.vertical_size.value * display.scale)
+        component_x = rectangle_x + float(
+            projection.horizontal_position.value * display.scale
+        )
+        component_y = rectangle_y + rectangle_height - float(
+            (
+                projection.vertical_position.value
+                + projection.vertical_size.value
+            )
+            * display.scale
+        )
+        component_rectangles.append(
+            f'<rect data-component-key="{html.escape(projection.component_key)}" '
+            f'x="{component_x:.2f}" y="{component_y:.2f}" '
+            f'width="{component_width:.2f}" height="{component_height:.2f}" '
+            'fill="rgba(39, 125, 161, 0.24)" stroke="#277da1" '
+            'stroke-width="1.2"/>'
+        )
+    components_markup = "\n    ".join(component_rectangles)
 
     return f"""
 <div style="border:1px solid rgba(73, 112, 140, 0.32); border-radius:10px; padding:10px; margin-top:10px; background:rgba(229, 242, 250, 0.18);">
@@ -347,6 +455,7 @@ def _general_arrangement_view_markup(view, title, missing_message):
       </marker>
     </defs>
     <rect x="{rectangle_x:.2f}" y="{rectangle_y:.2f}" width="{rectangle_width:.2f}" height="{rectangle_height:.2f}" fill="rgba(102, 177, 214, 0.10)" stroke="#315f78" stroke-width="1.8"/>
+    {components_markup}
     <line x1="{rectangle_x:.2f}" y1="{horizontal_y:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y:.2f}" stroke="#315f78" stroke-width="1" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
     <line x1="{rectangle_x:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#6b8798" stroke-width="0.8"/>
     <line x1="{rectangle_x + rectangle_width:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#6b8798" stroke-width="0.8"/>
@@ -362,14 +471,27 @@ def _general_arrangement_view_markup(view, title, missing_message):
 
 def _render_general_arrangement_views(general_arrangement, language):
     missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
+    outside_components = set()
     for view in build_envelope_views(general_arrangement):
+        projections = build_component_projections(general_arrangement, view)
+        outside_components.update(
+            projection.component_name
+            for projection in projections
+            if projection.out_of_envelope
+        )
         st.markdown(
             _general_arrangement_view_markup(
                 view,
                 translate(f"drawing_studio.ga.{view.key}_view", language),
                 missing_message,
+                projections,
             ),
             unsafe_allow_html=True,
+        )
+    if outside_components:
+        st.warning(
+            f"{translate('drawing_studio.ga.outside_envelope', language)} "
+            f"{', '.join(sorted(outside_components))}"
         )
 
 
@@ -503,6 +625,11 @@ def render_drawing_studio():
             )
             if item == "general_arrangement":
                 _render_overall_envelope_inputs(
+                    concept_id,
+                    general_arrangement,
+                    language,
+                )
+                _render_component_geometry_inputs(
                     concept_id,
                     general_arrangement,
                     language,
