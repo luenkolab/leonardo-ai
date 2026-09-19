@@ -1,5 +1,5 @@
 from application.images import list_concept_images
-from pdf_export import export_project_plan_pdf
+from pdf_export import export_drawing_package_pdf, export_project_plan_pdf
 
 
 def export_project_package(
@@ -13,3 +13,7 @@ def export_project_package(
         saved_images=saved_images,
         language=language,
     )
+
+
+def export_drawing_package(package, language="en") -> bytes:
+    return export_drawing_package_pdf(package, language=language)

@@ -1,3 +1,4 @@
+from datetime import datetime
 import html
 
 import streamlit as st
@@ -15,6 +16,7 @@ from application.engineering_parameters import (
     save_overall_envelope_values,
 )
 from application.images import MODERN_CONCEPT_IMAGE_TYPES, get_concept_image_slots
+from application.project_export import export_drawing_package
 from database import (
     get_concept_prompt,
     get_engineering_parameter_set,
@@ -37,11 +39,19 @@ from services.general_arrangement_service import (
     has_prepared_geometry,
 )
 from ui.components import render_generated_section_heading, render_result_box
-from ui.concept_page import _render_concept_image_slot
+from ui.concept_page import _render_concept_image_slot, _safe_pdf_filename
 from ui.state import get_current_concept_id, get_current_language, set_current_page
 
 
 _STUDIO_SECTION_ICON = """<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="5" r="2"/><path d="m11 7-5 13M13 7l5 13M8.2 14h7.6M5 20h4M15 20h4"/></svg>"""
+_DRAWING_PACKAGE_ITEMS = (
+    "general_arrangement",
+    "orthographic_views",
+    "assembly_drawings",
+    "component_detail_drawings",
+    "connections_fasteners",
+    "bill_of_materials",
+)
 
 
 def _parameter_label(parameter, language):
@@ -639,24 +649,37 @@ def _render_component_detail_drawings(general_arrangement, language):
                     )
 
 
+def _connection_display_data(connection, component_names):
+    component_a = connection["component_a"]
+    component_b = connection["component_b"]
+    if component_a not in component_names or component_b not in component_names:
+        return None
+    fields = [("connection_type", connection["connection_type"])]
+    fields.extend(
+        (field, connection[field])
+        for field in ("fastener_type", "quantity", "note")
+        if connection[field] is not None
+    )
+    return {
+        "components": f"{component_names[component_a]} ↔ {component_names[component_b]}",
+        "fields": tuple(fields),
+    }
+
+
 def _connection_markup(connection, component_names, language):
-    name_a = html.escape(component_names[connection["component_a"]])
-    name_b = html.escape(component_names[connection["component_b"]])
+    display = _connection_display_data(connection, component_names)
+    if display is None:
+        return ""
     rows = [
-        f"<div><strong>{name_a} ↔ {name_b}</strong></div>",
-        "<div><strong>"
-        f"{html.escape(translate('drawing_studio.connections.connection_type', language))}:"
-        "</strong> "
-        f"{html.escape(connection['connection_type'])}</div>",
+        f"<div><strong>{html.escape(display['components'])}</strong></div>",
     ]
-    for field in ("fastener_type", "quantity", "note"):
-        if connection[field] is not None:
-            rows.append(
-                "<div><strong>"
-                f"{html.escape(translate(f'drawing_studio.connections.{field}', language))}:"
-                "</strong> "
-                f"{html.escape(str(connection[field]))}</div>"
-            )
+    for field, value in display["fields"]:
+        rows.append(
+            "<div><strong>"
+            f"{html.escape(translate(f'drawing_studio.connections.{field}', language))}:"
+            "</strong> "
+            f"{html.escape(str(value))}</div>"
+        )
     return (
         '<div style="border:1px solid rgba(73, 112, 140, 0.32); '
         'border-radius:10px; padding:12px; margin-top:10px;">'
@@ -729,12 +752,10 @@ def _render_connections_fasteners(
         )
 
     for connection in connections:
-        if (
-            connection["component_a"] in component_names
-            and connection["component_b"] in component_names
-        ):
+        markup = _connection_markup(connection, component_names, language)
+        if markup:
             st.markdown(
-                _connection_markup(connection, component_names, language),
+                markup,
                 unsafe_allow_html=True,
             )
 
@@ -852,6 +873,180 @@ def _render_bill_of_materials(general_arrangement, concept_data, connections, la
     )
 
 
+def _export_view_group(view_data, language, title=None, assembly_item_numbers=None):
+    missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
+    return {
+        "title": title,
+        "views": tuple(
+            {
+                "title": translate(f"drawing_studio.ga.{view.key}_view", language),
+                "markup": _general_arrangement_view_markup(
+                    view,
+                    translate(f"drawing_studio.ga.{view.key}_view", language),
+                    missing_message,
+                    projections,
+                    assembly_item_numbers,
+                ),
+            }
+            for view, projections in view_data
+        ),
+    }
+
+
+def _drawing_package_export_data(
+    concept_data,
+    category,
+    general_arrangement,
+    connections,
+    language,
+    exported_at=None,
+):
+    missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
+    general_views = tuple(
+        (view, build_component_projections(general_arrangement, view))
+        for view in build_envelope_views(general_arrangement)
+    )
+    orthographic_views = _orthographic_view_data(general_arrangement)
+    assembly_views, numbered_components = _assembly_view_data(general_arrangement)
+    item_numbers = {
+        component.key: number for number, component in numbered_components
+    }
+    component_names = _component_names(general_arrangement)
+    connection_rows = []
+    for connection in connections:
+        display = _connection_display_data(connection, component_names)
+        if display is None:
+            continue
+        connection_rows.append(
+            {
+                "components": display["components"],
+                "fields": tuple(
+                    (
+                        translate(f"drawing_studio.connections.{field}", language),
+                        str(value),
+                    )
+                    for field, value in display["fields"]
+                ),
+            }
+        )
+    bom_rows = _build_bom_rows(general_arrangement, concept_data, connections)
+    section_titles = {
+        key: translate(f"drawing_studio.{key}", language)
+        for key in _DRAWING_PACKAGE_ITEMS
+    }
+    export_time = exported_at or datetime.now()
+    return {
+        "package_title": translate("drawing_studio.drawing_package", language),
+        "title_block": (
+            (
+                translate("drawing_studio.project", language),
+                concept_data.get("title") or translate("pdf.untitled", language),
+            ),
+            (translate("common.category", language), category),
+            (translate("pdf.export_date", language), export_time.strftime("%Y-%m-%d %H:%M")),
+        ),
+        "sections": (
+            {
+                "key": "general_arrangement",
+                "title": section_titles["general_arrangement"],
+                "kind": "drawings",
+                "missing_message": missing_message,
+                "groups": (_export_view_group(general_views, language),),
+            },
+            {
+                "key": "orthographic_views",
+                "title": section_titles["orthographic_views"],
+                "kind": "drawings",
+                "missing_message": missing_message,
+                "groups": (_export_view_group(orthographic_views, language),),
+            },
+            {
+                "key": "assembly_drawings",
+                "title": section_titles["assembly_drawings"],
+                "kind": "drawings",
+                "missing_message": missing_message,
+                "groups": (
+                    _export_view_group(
+                        assembly_views,
+                        language,
+                        assembly_item_numbers=item_numbers,
+                    ),
+                ),
+                "legend": tuple(
+                    f"{number} - {component.name}"
+                    for number, component in numbered_components
+                ),
+            },
+            {
+                "key": "component_detail_drawings",
+                "title": section_titles["component_detail_drawings"],
+                "kind": "drawings",
+                "missing_message": missing_message,
+                "groups": tuple(
+                    _export_view_group(
+                        tuple((view, ()) for view in views),
+                        language,
+                        title=component.name,
+                    )
+                    for component, views in _component_detail_view_data(
+                        general_arrangement
+                    )
+                ),
+            },
+            {
+                "key": "connections_fasteners",
+                "title": section_titles["connections_fasteners"],
+                "kind": "connections",
+                "connections": tuple(connection_rows),
+            },
+            {
+                "key": "bill_of_materials",
+                "title": section_titles["bill_of_materials"],
+                "kind": "bom",
+                "headings": (
+                    translate("drawing_studio.bom.item", language),
+                    translate("drawing_studio.bom.component", language),
+                    translate("drawing_studio.connections.quantity", language),
+                    translate("drawing_studio.bom.material", language),
+                    translate("drawing_studio.bom.fasteners_connections", language),
+                    translate("drawing_studio.bom.notes", language),
+                ),
+                "rows": bom_rows,
+            },
+        ),
+    }
+
+
+def _render_drawing_package_export(
+    concept_data,
+    category,
+    general_arrangement,
+    connections,
+    language,
+):
+    try:
+        package = _drawing_package_export_data(
+            concept_data,
+            category_display_name(category, language),
+            general_arrangement,
+            connections,
+            language,
+        )
+        pdf_data = export_drawing_package(package, language=language)
+    except Exception:
+        st.error(translate("concept.pdf_error", language))
+        return
+    st.download_button(
+        label=translate("drawing_studio.export_package", language),
+        data=pdf_data,
+        file_name=_safe_pdf_filename(
+            f"{concept_data.get('title') or 'leonardo'} Drawing Package"
+        ),
+        mime="application/pdf",
+        key="drawing_package_export",
+    )
+
+
 def render_drawing_studio():
     language = get_current_language()
     concept_id = get_current_concept_id()
@@ -946,14 +1141,6 @@ def render_drawing_studio():
         translate("drawing_studio.drawing_package", language),
         "",
     )
-    package_items = (
-        "general_arrangement",
-        "orthographic_views",
-        "assembly_drawings",
-        "component_detail_drawings",
-        "connections_fasteners",
-        "bill_of_materials",
-    )
     parameter_set = validate_parameter_set(
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
@@ -966,8 +1153,15 @@ def render_drawing_studio():
         ),
         language,
     )
+    _render_drawing_package_export(
+        concept_data,
+        category,
+        general_arrangement,
+        parameter_set["connections"],
+        language,
+    )
     package_columns = st.columns(2)
-    for index, item in enumerate(package_items):
+    for index, item in enumerate(_DRAWING_PACKAGE_ITEMS):
         with package_columns[index % 2]:
             if item == "general_arrangement":
                 package_content = general_arrangement_status

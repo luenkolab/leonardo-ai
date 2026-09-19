@@ -1,5 +1,6 @@
 import copy
 from contextlib import nullcontext
+from datetime import datetime
 from decimal import Decimal
 
 from application.images import MODERN_CONCEPT_IMAGE_TYPES
@@ -646,6 +647,137 @@ def test_drawing_package_keeps_component_and_connection_identity_across_sections
         for projection in projections
         if projection.component_key == "outside"
     )
+
+
+def test_drawing_package_export_reuses_ui_data_without_inventing_geometry():
+    concept = {
+        "title": "First Concept",
+        "system_components": [
+            {"key": "frame", "name": "Main Frame", "material": "Steel"},
+            {"key": "partial", "name": "Partial Bracket"},
+        ],
+    }
+    arrangement = _orthographic_arrangement(
+        {
+            "frame": _component_geometry(),
+            "partial": _component_geometry(
+                width=None, height=None, y=None, z=None
+            ),
+        },
+        concept["system_components"],
+    )
+    connections = [
+        {
+            "component_a": "frame",
+            "component_b": "partial",
+            "connection_type": "Bolted",
+            "fastener_type": "M8 bolt",
+            "quantity": 4,
+            "note": "Removable",
+        },
+        {
+            "component_a": "partial",
+            "component_b": "frame",
+            "connection_type": "Located",
+            "fastener_type": None,
+            "quantity": None,
+            "note": None,
+        },
+    ]
+    original_arrangement = arrangement.model_dump()
+    original_concept = copy.deepcopy(concept)
+    original_connections = copy.deepcopy(connections)
+
+    package = drawing_studio_page._drawing_package_export_data(
+        concept,
+        "Mechanical",
+        arrangement,
+        connections,
+        "en",
+        exported_at=datetime(2026, 9, 19, 12, 30),
+    )
+
+    assert [section["key"] for section in package["sections"]] == list(
+        drawing_studio_page._DRAWING_PACKAGE_ITEMS
+    )
+    assembly = package["sections"][2]
+    bom = package["sections"][5]
+    assert assembly["legend"] == ("1 - Main Frame", "2 - Partial Bracket")
+    assert [
+        (row["item"], row["component_key"], row["component"])
+        for row in bom["rows"]
+    ] == [
+        (1, "frame", "Main Frame"),
+        (2, "partial", "Partial Bracket"),
+    ]
+    partial_detail = package["sections"][3]["groups"][1]
+    assert all("<svg" not in view["markup"] for view in partial_detail["views"])
+    exported_connections = package["sections"][4]["connections"]
+    assert [field[0] for field in exported_connections[0]["fields"]] == [
+        "Connection Type",
+        "Fastener Type",
+        "Quantity",
+        "Note",
+    ]
+    assert exported_connections[1]["fields"] == (("Connection Type", "Located"),)
+    assert arrangement.model_dump() == original_arrangement
+    assert concept == original_concept
+    assert connections == original_connections
+
+
+def test_drawing_package_export_does_not_mix_concepts():
+    first = _orthographic_arrangement({"first": _component_geometry()})
+    second = _orthographic_arrangement({"second": _component_geometry()})
+
+    first_package = drawing_studio_page._drawing_package_export_data(
+        {"title": "First", "system_components": ["first"]},
+        "Mechanical",
+        first,
+        [],
+        "en",
+    )
+    second_package = drawing_studio_page._drawing_package_export_data(
+        {"title": "Second", "system_components": ["second"]},
+        "Mechanical",
+        second,
+        [],
+        "en",
+    )
+
+    assert [row["component_key"] for row in first_package["sections"][5]["rows"]] == [
+        "first"
+    ]
+    assert [row["component_key"] for row in second_package["sections"][5]["rows"]] == [
+        "second"
+    ]
+
+
+def test_drawing_package_export_uses_single_download_button(monkeypatch):
+    arrangement = _orthographic_arrangement({"frame": _component_geometry()})
+    buttons = []
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "export_drawing_package",
+        lambda package, language: b"%PDF-package",
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "download_button",
+        lambda **kwargs: buttons.append(kwargs),
+    )
+
+    drawing_studio_page._render_drawing_package_export(
+        {"title": "Test Project", "system_components": ["frame"]},
+        "mechanical",
+        arrangement,
+        [],
+        "en",
+    )
+
+    assert len(buttons) == 1
+    assert buttons[0]["label"] == "Export Drawing Package"
+    assert buttons[0]["data"] == b"%PDF-package"
+    assert buttons[0]["mime"] == "application/pdf"
 
 
 def test_assembly_numbering_does_not_mix_concepts():
