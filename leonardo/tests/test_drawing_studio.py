@@ -257,12 +257,8 @@ def test_studio_uses_current_concept_and_only_modern_references(
         "Component A ↔ Component B",
     }
     assert "Not generated" not in package_results.values()
-    assert len(envelope_input_renders) == 1
-    assert envelope_input_renders[0][0] == 91
-    assert envelope_input_renders[0][2] == "en"
-    assert len(component_input_renders) == 1
-    assert component_input_renders[0][0] == 91
-    assert component_input_renders[0][2] == "en"
+    assert envelope_input_renders == []
+    assert component_input_renders == []
     assert len(arrangement_view_renders) == 1
     assert arrangement_view_renders[0][1] == "en"
     assert len(orthographic_view_renders) == 1
@@ -919,6 +915,53 @@ def test_connection_presentation_shows_only_saved_optional_fields():
     assert "Fastener Type" not in minimal_markup
     assert "Quantity" not in minimal_markup
     assert "Note" not in minimal_markup
+
+
+def test_connections_section_is_read_only_in_main_drawing_package(monkeypatch):
+    arrangement = _orthographic_arrangement(
+        {
+            "frame": _component_geometry(),
+            "cover": _component_geometry(x="300"),
+        },
+        [
+            {"key": "frame", "name": "Main Frame"},
+            {"key": "cover", "name": "Safety Cover"},
+        ],
+    )
+    connections = [
+        {
+            "component_a": "frame",
+            "component_b": "cover",
+            "connection_type": "Bolted",
+            "fastener_type": None,
+            "quantity": None,
+            "note": None,
+        }
+    ]
+    rendered = []
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "columns",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Read-only connections must not render input columns")
+        ),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "markdown",
+        lambda markup, **kwargs: rendered.append(markup),
+    )
+
+    drawing_studio_page._render_connections_fasteners(
+        12,
+        arrangement,
+        connections,
+        "en",
+    )
+
+    assert len(rendered) == 1
+    assert "Main Frame ↔ Safety Cover" in rendered[0]
+    assert "Bolted" in rendered[0]
 
 
 def _bom_arrangement(concept_data):

@@ -386,7 +386,6 @@ def build_general_arrangement(concept_data, parameter_set):
             if (
                 group_name == "universal"
                 and key == "overall_dimensions_envelope"
-                and parameter.get("source") != "ai"
             ):
                 parsed_envelope = _parse_labelled_envelope(
                     value_text,

@@ -1,7 +1,9 @@
 import json
 import re
+from decimal import Decimal
 
 from i18n import ai_language_name
+from services.general_arrangement_service import normalize_known_value
 from services.openai_client import get_text_client
 
 
@@ -15,9 +17,13 @@ PARAMETER_STATUSES = {
 PARAMETER_SOURCES = {"user", "ai", "concept"}
 COMPONENT_GEOMETRY_FIELDS = ("length", "width", "height", "x", "y", "z")
 COMPONENT_GEOMETRY_UNITS = {"mm", "cm", "m"}
+_LENGTH_UNIT_TO_MM = {
+    "mm": Decimal("1"),
+    "cm": Decimal("10"),
+    "m": Decimal("1000"),
+}
 
 UNIVERSAL_PARAMETER_DEFINITIONS = (
-    ("unit_system", "Unit System"),
     ("overall_dimensions_envelope", "Overall Dimensions / Envelope"),
     ("mass_weight", "Mass / Weight"),
     ("primary_materials", "Primary Materials"),
@@ -180,93 +186,93 @@ def validate_parameter_set(value):
     }
 
 
-def merge_project_suggestions(parameter_set, suggestions):
-    current = validate_parameter_set(parameter_set)
-    universal_keys = {item["key"] for item in current["universal"]}
-    universal_labels = {item["label"].casefold() for item in current["universal"]}
-    incoming = _deduplicate_parameters(suggestions, "ai")
-    incoming = [
-        item
-        for item in incoming
-        if item["key"] not in universal_keys
-        and item["label"].casefold() not in universal_labels
-    ]
-
-    merged = list(current["project_specific"])
-    positions = {item["key"]: index for index, item in enumerate(merged)}
-    label_positions = {
-        item["label"].casefold(): index for index, item in enumerate(merged)
-    }
-    for suggestion in incoming:
-        position = positions.get(suggestion["key"])
-        if position is None:
-            position = label_positions.get(suggestion["label"].casefold())
-        if position is None:
-            positions[suggestion["key"]] = len(merged)
-            label_positions[suggestion["label"].casefold()] = len(merged)
-            merged.append(suggestion)
+def _ai_parameters(parameters, universal=False):
+    if not isinstance(parameters, list):
+        raise ValueError("AI engineering parameters must be arrays")
+    definitions = dict(UNIVERSAL_PARAMETER_DEFINITIONS)
+    normalized = []
+    for raw_parameter in parameters:
+        if not isinstance(raw_parameter, dict):
             continue
-        existing = merged[position]
-        if existing["status"] == "confirmed" or existing["source"] == "user":
-            continue
-        suggestion["key"] = existing["key"]
-        merged[position] = suggestion
+        candidate = dict(raw_parameter)
+        if universal:
+            try:
+                key = normalize_parameter_key(candidate.get("key"))
+            except ValueError:
+                continue
+            if key not in definitions:
+                continue
+            candidate["key"] = key
+            candidate["label"] = definitions[key]
+        parameter = normalize_parameter(candidate, "ai")
+        parameter["source"] = "ai"
+        parameter["status"] = (
+            "missing" if parameter["value"] is None else "suggested"
+        )
+        if parameter["value"] is not None and not parameter["rationale"]:
+            raise ValueError("AI engineering suggestions require a rationale")
+        normalized.append(parameter)
+    return _deduplicate_parameters(normalized, "ai")
 
-    return {
-        "universal": current["universal"],
-        "project_specific": merged,
-        "component_geometry": current["component_geometry"],
-        "connections": current["connections"],
-    }
 
-
-def suggest_project_parameters(
+def suggest_engineering_data(
     concept_data,
     category,
     original_prompt,
     language,
+    parameter_set,
+    components,
 ):
-    """Make one explicit text-model call for project-specific parameters."""
-    context = {
-        "title": concept_data.get("title"),
-        "category": category,
-        "executive_summary": concept_data.get("executive_summary"),
-        "technical_requirements": concept_data.get("technical_requirements"),
-        "materials": concept_data.get("materials"),
-        "system_components": concept_data.get("system_components"),
-        "constraints": concept_data.get("constraints"),
-        "risks": concept_data.get("risks"),
-        "modern_principle": concept_data.get("modern_principle"),
-        "problem_statement": concept_data.get("problem_statement"),
-        "use_cases": concept_data.get("use_cases"),
-        "original_prompt": original_prompt,
-    }
-    universal = [
-        {"key": key, "label": label}
-        for key, label in UNIVERSAL_PARAMETER_DEFINITIONS
+    """Make one shared-client call for all missing engineering data."""
+    current = validate_parameter_set(parameter_set)
+    component_context = [
+        {"key": component.key, "name": component.name} for component in components
     ]
+    context = {
+        "category": category,
+        "original_prompt": original_prompt,
+        "concept_data": concept_data,
+        "engineering_parameters": current,
+        "components": component_context,
+    }
     system_prompt = f"""
-You propose preliminary, project-specific engineering inputs for a physical product.
-Write labels and rationale in {ai_language_name(language)}.
+You are the AI Engineer for a physical-product concept. Work in this exact order:
+1. Complete only missing Universal Core engineering parameters.
+2. Generate project-specific parameters using the completed Core context.
+3. Complete only missing component geometry fields.
+4. Add only missing connections between supplied stable component keys.
 
-Return exactly one JSON object with a project_specific array. Each item must contain:
-key, label, value, unit, status, source, rationale.
+Return exactly one JSON object with these existing contract keys:
+universal, project_specific, component_geometry, connections.
+Universal and project_specific items use key, label, value, unit, status, source,
+rationale. Geometry fields are length, width, height, x, y, z, unit. Connection
+fields are component_a, component_b, connection_type, fastener_type, quantity, note.
 
 Rules:
-- Infer parameters from the supplied project context, not from a hardcoded category list.
-- Suggest only parameters specific to this project; do not duplicate the Universal Core by key or meaning.
-- Use stable lowercase snake_case keys.
-- source must be "ai".
-- If evidence is insufficient, set value to null and status to "missing".
-- If a preliminary value is useful, use a range or clearly stated assumption, set status to "suggested", and explain the assumption briefly.
-- Never invent unsupported precision, certification, compliance, dimensions, loads, or performance.
-- Do not infer measurements from images; no image data is provided or authoritative.
-- Do not claim professional validation, structural safety, legal approval, or certification.
-- Keep unit null when no unit is applicable or supported.
-- Do not add information unrelated to engineering preparation for this specific project.
-
-Universal Core that must not be duplicated:
-{json.dumps(universal, ensure_ascii=False)}
+- Write labels and rationale in {ai_language_name(language)}.
+- Never replace non-empty Core values or existing component geometry fields.
+- Rebuild project_specific for the current context on every run. Recalculate records
+  whose current source is "ai"; do not replace records with a non-AI source.
+- Keep existing connections and add only genuinely missing component pairs.
+- source must be "ai" for parameter records. AI suggestions are preliminary and
+  are not verified engineering truth.
+- Use realistic physical scale based on purpose and project context: bridges use
+  bridge scale, service robots use human/robotic scale, vehicles use vehicle scale,
+  wearables use body scale, industrial equipment uses industrial scale, and drones
+  use mission/payload scale.
+- No image pixels or visual proportions are available as authoritative dimensions.
+  Never infer confirmed physical scale from images.
+- Overall Dimensions / Envelope, when proposed, must be labelled axes in the form
+  "length=<number>; width=<number>; height=<number>" with one of mm, cm, or m.
+- Component geometry may reference only the supplied stable component keys. Use the
+  existing component unit when a partial geometry record already has one.
+- Dimensions must be positive numbers. Coordinates may be zero or positive.
+- Connections may reference only two different supplied component keys. Quantity is
+  a positive integer or null.
+- Do not invent unsupported precision, certification, compliance, safety validation,
+  performance, geometry, or connections. Use null when a reasonable preliminary
+  value cannot be supported by the structured project context.
+- Do not return extra top-level keys.
 """
     response = get_text_client().chat.completions.create(
         model=ENGINEERING_PARAMETERS_MODEL,
@@ -281,15 +287,124 @@ Universal Core that must not be duplicated:
     if not content:
         raise RuntimeError("Empty response from OpenAI")
     payload = json.loads(content)
-    suggestions = payload.get("project_specific")
-    if not isinstance(suggestions, list):
-        raise ValueError("AI response must contain a project_specific array")
-    normalized = _deduplicate_parameters(suggestions, "ai")
-    for parameter in normalized:
-        if not parameter["rationale"]:
-            raise ValueError("AI engineering suggestions require a rationale")
-        parameter["source"] = "ai"
-        parameter["status"] = (
-            "missing" if parameter["value"] is None else "suggested"
-        )
+    if not isinstance(payload, dict):
+        raise ValueError("AI Engineer response must be a JSON object")
+    normalized = validate_parameter_set(
+        {
+            "universal": _ai_parameters(payload.get("universal", []), True),
+            "project_specific": _ai_parameters(
+                payload.get("project_specific", [])
+            ),
+            "component_geometry": payload.get("component_geometry", {}),
+            "connections": payload.get("connections", []),
+        }
+    )
     return normalized
+
+
+def _converted_geometry_value(value, source_unit, target_unit, field, component_key):
+    normalized = normalize_known_value(
+        value,
+        source_unit,
+        source_type="engineering_parameter",
+        source_key=f"component_geometry.{component_key}.{field}",
+    )
+    if normalized is None or normalized.quantity != "length":
+        return None
+    if field in {"length", "width", "height"} and normalized.value <= 0:
+        return None
+    if field in {"x", "y", "z"} and normalized.value < 0:
+        return None
+    converted = normalized.value / _LENGTH_UNIT_TO_MM[target_unit]
+    return format(converted.normalize(), "f")
+
+
+def merge_ai_engineering_data(parameter_set, suggestions, valid_component_keys):
+    """Fill missing fields while preserving every existing non-empty value."""
+    current = validate_parameter_set(parameter_set)
+    incoming = validate_parameter_set(suggestions)
+    incoming_universal = {item["key"]: item for item in incoming["universal"]}
+    for parameter in current["universal"]:
+        suggestion = incoming_universal.get(parameter["key"])
+        if (
+            parameter["value"] is not None
+            or not suggestion
+            or suggestion["value"] is None
+        ):
+            continue
+        if (
+            parameter["unit"]
+            and suggestion["unit"]
+            and parameter["unit"].casefold() != suggestion["unit"].casefold()
+        ):
+            continue
+        parameter.update(
+            {
+                "value": suggestion["value"],
+                "unit": parameter["unit"] or suggestion["unit"],
+                "status": "suggested",
+                "source": "ai",
+                "rationale": suggestion["rationale"],
+            }
+        )
+
+    universal_keys = {item["key"] for item in current["universal"]}
+    universal_labels = {item["label"].casefold() for item in current["universal"]}
+    merged_project = [
+        parameter
+        for parameter in current["project_specific"]
+        if parameter["source"] != "ai"
+    ]
+    protected_keys = {item["key"] for item in merged_project}
+    protected_labels = {item["label"].casefold() for item in merged_project}
+    for suggestion in incoming["project_specific"]:
+        if (
+            suggestion["key"] in universal_keys
+            or suggestion["label"].casefold() in universal_labels
+            or suggestion["key"] in protected_keys
+            or suggestion["label"].casefold() in protected_labels
+        ):
+            continue
+        merged_project.append(suggestion)
+    current["project_specific"] = merged_project
+
+    valid_keys = {normalize_parameter_key(key) for key in valid_component_keys}
+    for component_key, suggestion in incoming["component_geometry"].items():
+        if component_key not in valid_keys:
+            continue
+        existing = current["component_geometry"].get(component_key)
+        target_unit = existing["unit"] if existing else suggestion["unit"]
+        merged_geometry = dict(existing or {"unit": target_unit})
+        for field in COMPONENT_GEOMETRY_FIELDS:
+            if merged_geometry.get(field) is not None or suggestion.get(field) is None:
+                continue
+            merged_geometry[field] = _converted_geometry_value(
+                suggestion[field],
+                suggestion["unit"],
+                target_unit,
+                field,
+                component_key,
+            )
+        if any(
+            merged_geometry.get(field) is not None
+            for field in COMPONENT_GEOMETRY_FIELDS
+        ):
+            current["component_geometry"][component_key] = merged_geometry
+
+    connection_keys = {
+        frozenset((item["component_a"], item["component_b"]))
+        for item in current["connections"]
+    }
+    for connection in incoming["connections"]:
+        if (
+            connection["component_a"] not in valid_keys
+            or connection["component_b"] not in valid_keys
+            or connection["component_a"] == connection["component_b"]
+        ):
+            continue
+        identity = frozenset((connection["component_a"], connection["component_b"]))
+        if identity in connection_keys:
+            continue
+        current["connections"].append(connection)
+        connection_keys.add(identity)
+    return validate_parameter_set(current)

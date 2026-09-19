@@ -121,7 +121,7 @@ def test_unlabelled_envelope_and_concept_text_do_not_invent_dimensions():
     assert not has_prepared_geometry(arrangement)
 
 
-def test_ai_suggested_or_arbitrary_parameters_do_not_become_geometry():
+def test_labelled_ai_envelope_uses_core_contract_but_arbitrary_parameters_do_not():
     arrangement = build_general_arrangement(
         {"system_components": ["Frame"]},
         {
@@ -136,8 +136,11 @@ def test_ai_suggested_or_arbitrary_parameters_do_not_become_geometry():
         },
     )
 
-    assert arrangement.overall_envelope.length is None
-    assert len(arrangement.raw_inputs) == 2
+    assert arrangement.overall_envelope.length.value == Decimal("1200")
+    assert arrangement.overall_envelope.width.value == Decimal("800")
+    assert arrangement.overall_envelope.height.value == Decimal("600")
+    assert len(arrangement.raw_inputs) == 1
+    assert arrangement.raw_inputs[0].raw_value == "1200"
     assert not has_prepared_geometry(arrangement)
 
 
@@ -405,7 +408,11 @@ def test_component_geometry_saves_by_stable_key_without_replacing_other_data(
         "en",
     )
     existing = build_empty_parameter_set()
-    existing["universal"][0]["value"] = "SI"
+    mass = next(
+        item for item in existing["universal"] if item["key"] == "mass_weight"
+    )
+    mass["value"] = "25"
+    mass["unit"] = "kg"
     existing["project_specific"] = [
         {
             "key": "payload",
@@ -428,8 +435,12 @@ def test_component_geometry_saves_by_stable_key_without_replacing_other_data(
 
     assert set(stored["component_geometry"]) == {"structural_frame", "control_unit"}
     assert stored["component_geometry"]["structural_frame"]["length"] == "1.2"
-    assert len(stored["universal"]) == 12
-    assert stored["universal"][0]["value"] == "SI"
+    assert len(stored["universal"]) == 11
+    assert next(
+        item["value"]
+        for item in stored["universal"]
+        if item["key"] == "mass_weight"
+    ) == "25"
     assert stored["project_specific"][0]["value"] == "25"
 
 

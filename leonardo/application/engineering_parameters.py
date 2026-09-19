@@ -12,7 +12,9 @@ from i18n import normalize_language
 from services import concept_translation_service
 from services.engineering_parameters_service import (
     build_empty_parameter_set,
+    merge_ai_engineering_data,
     normalize_parameter_key,
+    suggest_engineering_data,
     validate_parameter_set,
 )
 from services.general_arrangement_service import (
@@ -76,12 +78,54 @@ def save_engineering_parameter_values(
         parameter["key"]: parameter for parameter in displayed[group_name]
     }
     for parameter in canonical[group_name]:
+        if parameter["key"] not in rendered_values:
+            continue
         value, unit = rendered_values[parameter["key"]]
+        displayed_parameter = displayed_by_key[parameter["key"]]
+        if (
+            value == displayed_parameter["value"]
+            and unit == displayed_parameter["unit"]
+        ):
+            continue
         parameter["value"] = value
-        if unit != displayed_by_key[parameter["key"]]["unit"]:
+        if unit != displayed_parameter["unit"]:
             parameter["unit"] = unit
         parameter["status"] = "confirmed" if value else "missing"
+        parameter["source"] = "user"
     save_engineering_parameter_set(concept_id, canonical)
+
+
+def run_ai_engineer(
+    concept_id,
+    concept_data,
+    category,
+    original_prompt,
+    language,
+):
+    """Complete missing engineering data and save it in the existing contract."""
+    current = validate_parameter_set(
+        get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
+    )
+    components = build_general_arrangement(concept_data, current).components
+    suggestions = suggest_engineering_data(
+        concept_data,
+        category,
+        original_prompt,
+        language,
+        current,
+        components,
+    )
+    merged = merge_ai_engineering_data(
+        current,
+        suggestions,
+        {component.key for component in components},
+    )
+    save_engineering_parameter_set(
+        concept_id,
+        merged,
+        source_language=normalize_language(language),
+    )
+    return merged
 
 
 def save_overall_envelope_values(concept_id, length, width, height, unit):

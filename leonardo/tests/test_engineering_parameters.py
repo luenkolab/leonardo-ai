@@ -31,6 +31,12 @@ def _project_parameter(
     }
 
 
+def _universal(parameter_set, key):
+    return next(
+        parameter for parameter in parameter_set["universal"] if parameter["key"] == key
+    )
+
+
 def _save_test_concept(valid_concept, title):
     return database.save_concept(
         title,
@@ -85,7 +91,8 @@ def test_universal_core_is_generic_and_starts_missing():
     parameter_set = service.build_empty_parameter_set()
     keys = {item["key"] for item in parameter_set["universal"]}
 
-    assert len(keys) == 12
+    assert len(keys) == 11
+    assert "unit_system" not in keys
     assert not any("bridge" in key or "river" in key for key in keys)
     assert all(item["status"] == "missing" for item in parameter_set["universal"])
 
@@ -96,7 +103,7 @@ def test_component_geometry_survives_validation_save_and_load(
 ):
     concept_id = _save_test_concept(valid_concept, "Geometry contract")
     parameter_set = service.build_empty_parameter_set()
-    parameter_set["universal"][0]["value"] = "SI"
+    _universal(parameter_set, "mass_weight")["value"] = "25"
     parameter_set["project_specific"] = [_project_parameter("payload", "25")]
     parameter_set["component_geometry"] = {
         "main-frame": {
@@ -124,7 +131,7 @@ def test_component_geometry_survives_validation_save_and_load(
         "z": "25",
         "unit": "m",
     }
-    assert loaded["universal"][0]["value"] == "SI"
+    assert _universal(loaded, "mass_weight")["value"] == "25"
     assert loaded["project_specific"][0]["value"] == "25"
     assert "unknown_top_level" not in loaded
 
@@ -144,7 +151,7 @@ def test_connections_survive_validation_save_load_without_losing_parameters(
     concept_id = _save_test_concept(valid_concept, "Connected project")
     parameter_set = service.build_empty_parameter_set()
     component_a, component_b = _component_keys(valid_concept)[:2]
-    parameter_set["universal"][0]["value"] = "SI"
+    _universal(parameter_set, "mass_weight")["value"] = "25"
     parameter_set["project_specific"] = [_project_parameter("payload", "25")]
     parameter_set["component_geometry"] = {
         component_a: {
@@ -182,7 +189,7 @@ def test_connections_survive_validation_save_load_without_losing_parameters(
             "note": "User supplied connection",
         }
     ]
-    assert loaded["universal"][0]["value"] == "SI"
+    assert _universal(loaded, "mass_weight")["value"] == "25"
     assert loaded["project_specific"][0]["value"] == "25"
     assert loaded["component_geometry"][component_a]["length"] == "100"
 
@@ -260,50 +267,38 @@ def test_connections_remain_scoped_to_their_concepts(
     assert second[0]["component_a"] == "second_frame"
 
 
-def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
-    parameter_set = service.build_empty_parameter_set()
-    parameter_set["project_specific"] = [
-        _project_parameter("payload", "25 kg", "confirmed", "ai"),
-        _project_parameter("operating_cycle", "AI cycle", "suggested", "ai"),
-    ]
-    parameter_set["project_specific"][1]["value"] = "User cycle"
-    parameter_set["project_specific"][1]["source"] = "user"
-    suggestions = [
-        _project_parameter("payload", "40 kg", "suggested"),
-        _project_parameter("operating_cycle", "AI cycle", "suggested"),
-        _project_parameter("reach", "1–2 m preliminary range", "suggested"),
-        _project_parameter("reach", "duplicate", "suggested"),
-        _project_parameter(
-            "alternate_reach_key",
-            "duplicate by label",
-            "suggested",
-            label="Reach",
-        ),
-        _project_parameter("unit_system", "SI", "suggested", label="Unit System"),
-    ]
-
-    merged = service.merge_project_suggestions(parameter_set, suggestions)
-    by_key = {item["key"]: item for item in merged["project_specific"]}
-
-    assert by_key["payload"]["value"] == "25 kg"
-    assert by_key["operating_cycle"]["value"] == "User cycle"
-    assert by_key["reach"]["value"] == "1–2 m preliminary range"
-    assert list(item["key"] for item in merged["project_specific"]).count("reach") == 1
-    assert "alternate_reach_key" not in by_key
-    assert "unit_system" not in by_key
-
-
-def test_ai_suggestion_uses_shared_client_once_and_returns_structured_data(
+def test_ai_engineer_uses_shared_client_for_full_engineering_context(
     monkeypatch,
     valid_concept,
 ):
-    calls = []
+    parameter_set = service.build_empty_parameter_set()
+    _universal(parameter_set, "mass_weight")["value"] = "25"
+    components = [SimpleNamespace(key="main_frame", name="Main Frame")]
     payload = {
-        "project_specific": [
-            _project_parameter("payload", None, "missing"),
-            _project_parameter("reach", "1–2 m preliminary range", "suggested"),
-        ]
+        "universal": [
+            {
+                **_universal(parameter_set, "overall_dimensions_envelope"),
+                "value": "length=2; width=1; height=1.5",
+                "unit": "m",
+                "source": "ai",
+                "rationale": "Preliminary purpose-based scale",
+            }
+        ],
+        "project_specific": [_project_parameter("payload", "25", "suggested")],
+        "component_geometry": {
+            "main_frame": {
+                "length": "2",
+                "width": "1",
+                "height": "1.5",
+                "x": "0",
+                "y": "0",
+                "z": "0",
+                "unit": "m",
+            }
+        },
+        "connections": [],
     }
+    calls = []
     response = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))]
     )
@@ -316,21 +311,205 @@ def test_ai_suggestion_uses_shared_client_once_and_returns_structured_data(
     )
     monkeypatch.setattr(service, "get_text_client", lambda: client)
 
-    result = service.suggest_project_parameters(
+    result = service.suggest_engineering_data(
         valid_concept,
         "robotics_automation",
-        "A configurable service robot",
+        "Original startup prompt",
         "en",
+        parameter_set,
+        components,
     )
 
     assert len(calls) == 1
-    assert [item["key"] for item in result] == ["payload", "reach"]
-    assert result[0]["value"] is None
+    assert result["universal"][0]["key"] == "overall_dimensions_envelope"
+    assert result["project_specific"][0]["key"] == "payload"
+    assert result["component_geometry"]["main_frame"]["length"] == "2"
     prompt = "\n".join(message["content"] for message in calls[0]["messages"])
-    assert "Never invent unsupported precision" in prompt
-    assert "Do not infer measurements from images" in prompt
-    assert "A configurable service robot" in prompt
+    assert "Original startup prompt" in prompt
     assert "technical_requirements" in prompt
+    assert "engineering_parameters" in prompt
+    assert "realistic physical scale" in prompt
+    assert "Never infer confirmed physical scale from images" in prompt
+
+
+def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
+    current = service.build_empty_parameter_set()
+    _universal(current, "overall_dimensions_envelope").update(
+        {
+            "value": "length=1; width=0.5; height=0.5",
+            "unit": "m",
+            "status": "confirmed",
+            "source": "user",
+        }
+    )
+    current["project_specific"] = [
+        _project_parameter("payload", "User payload", "confirmed", "user"),
+        _project_parameter(
+            "concept_limit", "Concept value", "confirmed", "concept"
+        ),
+        _project_parameter("duty_cycle", "Old AI cycle", "suggested", "ai"),
+        _project_parameter("obsolete", "Old AI value", "suggested", "ai"),
+    ]
+    current["component_geometry"] = {
+        "frame": {
+            "length": "1000",
+            "width": None,
+            "height": None,
+            "x": "0",
+            "y": None,
+            "z": None,
+            "unit": "mm",
+        }
+    }
+    current["connections"] = [
+        {
+            "component_a": "frame",
+            "component_b": "cover",
+            "connection_type": "User bolted",
+            "fastener_type": "User M8",
+            "quantity": 4,
+            "note": "User connection",
+        }
+    ]
+    suggestions = service.build_empty_parameter_set()
+    suggestions["universal"] = [
+        {
+            **_universal(current, "overall_dimensions_envelope"),
+            "value": "length=2; width=1; height=1.5",
+            "status": "suggested",
+            "source": "ai",
+        },
+        {
+            **_universal(current, "mass_weight"),
+            "value": "25",
+            "unit": "kg",
+            "status": "suggested",
+            "source": "ai",
+            "rationale": "Purpose-based estimate",
+        },
+    ]
+    suggestions["project_specific"] = [
+        _project_parameter("payload", "AI payload", "suggested"),
+        _project_parameter("concept_limit", "AI replacement", "suggested"),
+        _project_parameter("duty_cycle", "8 h", "suggested"),
+    ]
+    suggestions["component_geometry"] = {
+        "frame": {
+            "length": "2",
+            "width": "50",
+            "height": "25",
+            "x": "5",
+            "y": "10",
+            "z": "0",
+            "unit": "cm",
+        },
+        "unknown": {
+            "length": "10",
+            "width": None,
+            "height": None,
+            "x": None,
+            "y": None,
+            "z": None,
+            "unit": "mm",
+        },
+    }
+    suggestions["connections"] = [
+        {
+            "component_a": "frame",
+            "component_b": "cover",
+            "connection_type": "AI welded",
+            "fastener_type": None,
+            "quantity": None,
+            "note": None,
+        },
+        {
+            "component_a": "frame",
+            "component_b": "sensor",
+            "connection_type": "Clipped",
+            "fastener_type": None,
+            "quantity": None,
+            "note": "AI preliminary",
+        },
+    ]
+
+    merged = service.merge_ai_engineering_data(
+        current,
+        suggestions,
+        {"frame", "cover", "sensor"},
+    )
+
+    assert (
+        _universal(merged, "overall_dimensions_envelope")["value"]
+        == "length=1; width=0.5; height=0.5"
+    )
+    assert _universal(merged, "mass_weight")["value"] == "25"
+    assert _universal(merged, "mass_weight")["source"] == "ai"
+    project_by_key = {
+        parameter["key"]: parameter for parameter in merged["project_specific"]
+    }
+    assert project_by_key["payload"]["value"] == "User payload"
+    assert project_by_key["concept_limit"]["value"] == "Concept value"
+    assert project_by_key["duty_cycle"]["value"] == "8 h"
+    assert "obsolete" not in project_by_key
+    assert merged["component_geometry"]["frame"] == {
+        "length": "1000",
+        "width": "500",
+        "height": "250",
+        "x": "0",
+        "y": "100",
+        "z": "0",
+        "unit": "mm",
+    }
+    assert "unknown" not in merged["component_geometry"]
+    assert merged["connections"][0]["connection_type"] == "User bolted"
+    assert len(merged["connections"]) == 2
+    assert merged["connections"][1]["component_b"] == "sensor"
+
+
+def test_ai_engineer_application_saves_only_current_concept(
+    monkeypatch,
+    temporary_database,
+    valid_concept,
+):
+    first = copy.deepcopy(valid_concept)
+    first["system_components"] = ["First frame"]
+    second = copy.deepcopy(valid_concept)
+    second["system_components"] = ["Second frame"]
+    first_id = _save_test_concept(first, "First AI Engineer")
+    second_id = _save_test_concept(second, "Second AI Engineer")
+    suggestions = service.build_empty_parameter_set()
+    suggestions["universal"] = [
+        {
+            **_universal(suggestions, "mass_weight"),
+            "value": "25",
+            "unit": "kg",
+            "status": "suggested",
+            "source": "ai",
+            "rationale": "Project context",
+        }
+    ]
+    monkeypatch.setattr(
+        parameter_application,
+        "suggest_engineering_data",
+        lambda *args: suggestions,
+    )
+
+    parameter_application.run_ai_engineer(
+        first_id,
+        first,
+        "robotics_automation",
+        "First prompt",
+        "en",
+    )
+
+    assert (
+        _universal(
+            database.get_engineering_parameter_set(first_id),
+            "mass_weight",
+        )["value"]
+        == "25"
+    )
+    assert database.get_engineering_parameter_set(second_id) is None
 
 
 def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
@@ -350,7 +529,7 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
     )
     monkeypatch.setattr(
         drawing_studio_page,
-        "suggest_project_parameters",
+        "run_ai_engineer",
         lambda *args: calls.append(args),
     )
     monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
@@ -384,7 +563,7 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
     ]
 
 
-def test_edit_enables_value_and_unit_fields_in_both_parameter_blocks(monkeypatch):
+def test_edit_enables_only_core_parameter_fields(monkeypatch):
     field_states = []
 
     class Column:
@@ -397,6 +576,17 @@ def test_edit_enables_value_and_unit_fields_in_both_parameter_blocks(monkeypatch
 
     parameter_set = service.build_empty_parameter_set()
     parameter_set["universal"] = parameter_set["universal"][:1]
+    parameter_set["universal"].append(
+        {
+            "key": "unit_system",
+            "label": "Unit System",
+            "value": "SI",
+            "unit": None,
+            "status": "confirmed",
+            "source": "user",
+            "rationale": None,
+        }
+    )
     parameter_set["project_specific"] = [
         _project_parameter("payload", "25", "suggested")
     ]
@@ -426,7 +616,7 @@ def test_edit_enables_value_and_unit_fields_in_both_parameter_blocks(monkeypatch
         "en",
         False,
     )
-    assert field_states == [True, True, True, True]
+    assert field_states == [True, True]
     assert captions == ["AI Suggestion: Needed for project preparation"]
 
     field_states.clear()
@@ -444,7 +634,43 @@ def test_edit_enables_value_and_unit_fields_in_both_parameter_blocks(monkeypatch
         "en",
         True,
     )
-    assert field_states == [False, False, False, False]
+    assert field_states == [False, False]
+
+
+def test_project_specific_display_omits_empty_rows(monkeypatch):
+    rendered_markdown = []
+
+    class Column:
+        def markdown(self, value, **kwargs):
+            rendered_markdown.append(value)
+
+        def text_input(self, *_args, **_kwargs):
+            raise AssertionError("Project-specific values must be read-only text")
+
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["project_specific"] = [
+        _project_parameter("missing", None),
+        _project_parameter("known", "25 kg", "suggested"),
+    ]
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "columns",
+        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "caption", lambda *args: None)
+    monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
+
+    drawing_studio_page._render_parameter_rows(
+        7,
+        parameter_set,
+        "project_specific",
+        "en",
+        False,
+    )
+
+    assert "25 kg" in rendered_markdown
+    assert "**Known**" in rendered_markdown
+    assert "**Missing**" not in rendered_markdown
 
 
 def test_block_saves_are_independent_and_update_internal_statuses(
@@ -460,26 +686,25 @@ def test_block_saves_are_independent_and_update_internal_statuses(
     ]
     database.save_engineering_parameter_set(first_id, parameter_set)
     isolated = service.build_empty_parameter_set()
-    isolated["universal"][0]["value"] = "Imperial"
-    isolated["universal"][0]["status"] = "confirmed"
+    isolated_envelope = _universal(isolated, "overall_dimensions_envelope")
+    isolated_envelope["value"] = "length=10; width=5; height=4"
+    isolated_envelope["unit"] = "ft"
+    isolated_envelope["status"] = "confirmed"
     database.save_engineering_parameter_set(second_id, isolated)
 
     reruns = []
-    ai_calls = []
-    active_group = ["universal"]
     monkeypatch.setattr(
         drawing_studio_page.st,
         "session_state",
         {
             f"engineering_parameters_edit_mode_{first_id}_universal": True,
-            f"engineering_parameters_edit_mode_{first_id}_project_specific": False,
         },
     )
     monkeypatch.setattr(
         drawing_studio_page.st,
         "button",
         lambda _label, **kwargs: kwargs.get("key")
-        == f"engineering_parameters_save_{first_id}_{active_group[0]}",
+        == f"engineering_parameters_save_{first_id}_universal",
     )
     monkeypatch.setattr(
         drawing_studio_page.st,
@@ -493,22 +718,18 @@ def test_block_saves_are_independent_and_update_internal_statuses(
     )
     monkeypatch.setattr(drawing_studio_page.st, "rerun", lambda: reruns.append(True))
     monkeypatch.setattr(drawing_studio_page, "render_result_box", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        drawing_studio_page,
-        "suggest_project_parameters",
-        lambda *args: ai_calls.append(args),
-    )
 
     def render_rows(_concept_id, current, group_name, _language, edit_mode):
-        assert edit_mode is (group_name == active_group[0])
+        assert edit_mode is (group_name == "universal")
         values = {
             parameter["key"]: (parameter["value"], parameter["unit"])
             for parameter in current[group_name]
         }
-        if group_name == "universal" and active_group[0] == "universal":
-            values[current[group_name][0]["key"]] = ("SI", "system")
-        if group_name == "project_specific" and active_group[0] == "project_specific":
-            values[current[group_name][0]["key"]] = ("Reviewed AI value", "kg")
+        if group_name == "universal":
+            values["overall_dimensions_envelope"] = (
+                "length=1; width=0.5; height=0.5",
+                "m",
+            )
         return values
 
     monkeypatch.setattr(drawing_studio_page, "_render_parameter_rows", render_rows)
@@ -521,44 +742,33 @@ def test_block_saves_are_independent_and_update_internal_statuses(
     )
 
     reloaded = database.get_engineering_parameter_set(first_id)
-    assert reloaded["universal"][0]["value"] == "SI"
-    assert reloaded["universal"][0]["unit"] == "system"
-    assert reloaded["universal"][0]["status"] == "confirmed"
-    assert reloaded["universal"][1]["value"] is None
-    assert reloaded["universal"][1]["status"] == "missing"
+    reloaded_envelope = _universal(reloaded, "overall_dimensions_envelope")
+    assert reloaded_envelope["value"] == "length=1; width=0.5; height=0.5"
+    assert reloaded_envelope["unit"] == "m"
+    assert reloaded_envelope["status"] == "confirmed"
+    assert reloaded_envelope["source"] == "user"
+    assert _universal(reloaded, "mass_weight")["value"] is None
+    assert _universal(reloaded, "mass_weight")["status"] == "missing"
     assert reloaded["project_specific"][0]["value"] == "AI value"
     assert reloaded["project_specific"][0]["status"] == "suggested"
     assert drawing_studio_page.st.session_state[
         f"engineering_parameters_edit_mode_{first_id}_universal"
     ] is False
 
-    active_group[0] = "project_specific"
-    drawing_studio_page.st.session_state[
-        f"engineering_parameters_edit_mode_{first_id}_project_specific"
-    ] = True
-    drawing_studio_page._render_engineering_parameters(
-        first_id,
-        valid_concept,
-        "robotics_automation",
-        "en",
+    assert (
+        _universal(
+            database.get_engineering_parameter_set(second_id),
+            "overall_dimensions_envelope",
+        )["value"]
+        == "length=10; width=5; height=4"
     )
-
-    reloaded = database.get_engineering_parameter_set(first_id)
-    assert reloaded["project_specific"][0]["value"] == "Reviewed AI value"
-    assert reloaded["project_specific"][0]["unit"] == "kg"
-    assert reloaded["project_specific"][0]["status"] == "confirmed"
-    assert database.get_engineering_parameter_set(second_id)["universal"][0]["value"] == "Imperial"
-    assert drawing_studio_page.st.session_state[
-        f"engineering_parameters_edit_mode_{first_id}_project_specific"
-    ] is False
-    assert ai_calls == []
-    assert reruns == [True, True]
+    assert reruns == [True]
 
 
-def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
+def test_ai_engineer_button_runs_one_workflow(monkeypatch):
     calls = []
-    saved = []
     reruns = []
+    button_keys = []
     monkeypatch.setattr(
         drawing_studio_page,
         "get_engineering_parameter_set",
@@ -572,20 +782,20 @@ def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
     monkeypatch.setattr(drawing_studio_page, "get_concept_prompt", lambda _concept_id: "prompt")
     monkeypatch.setattr(
         drawing_studio_page,
-        "suggest_project_parameters",
-        lambda *args: calls.append(args) or [_project_parameter("payload")],
+        "run_ai_engineer",
+        lambda *args: calls.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
-        "save_engineering_parameter_set",
-        lambda *args, **kwargs: saved.append((args, kwargs)),
+        "save_engineering_parameter_values",
+        lambda *args: None,
     )
     monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
-    monkeypatch.setattr(
-        drawing_studio_page.st,
-        "button",
-        lambda _label, **kwargs: kwargs.get("key") == "engineering_parameters_suggest_12",
-    )
+    def click_ai_engineer(_label, **kwargs):
+        button_keys.append(kwargs.get("key"))
+        return kwargs.get("key") == "engineering_parameters_ai_engineer_12"
+
+    monkeypatch.setattr(drawing_studio_page.st, "button", click_ai_engineer)
     monkeypatch.setattr(
         drawing_studio_page.st,
         "container",
@@ -604,9 +814,16 @@ def test_suggest_button_makes_one_call_and_saves_merged_set(monkeypatch):
     )
 
     assert len(calls) == 1
-    assert saved[0][0][0] == 12
-    assert saved[0][0][1]["project_specific"][0]["key"] == "payload"
-    assert saved[0][1] == {"source_language": "en"}
+    assert calls[0] == (
+        12,
+        {"title": "Robot"},
+        "robotics_automation",
+        "prompt",
+        "en",
+    )
+    assert "engineering_parameters_suggest_12" not in button_keys
+    assert "engineering_parameters_edit_12_project_specific" not in button_keys
+    assert "engineering_parameters_save_12_project_specific" not in button_keys
     assert reruns == [True]
 
 
