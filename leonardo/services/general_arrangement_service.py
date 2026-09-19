@@ -419,31 +419,34 @@ def build_general_arrangement(concept_data, parameter_set):
     )
 
 
-def build_envelope_views(arrangement):
-    envelope = arrangement.overall_envelope
+def build_dimension_views(dimensions):
     return (
         EnvelopeView(
             key="top",
             horizontal_axis="length",
             vertical_axis="width",
-            horizontal=envelope.length,
-            vertical=envelope.width,
+            horizontal=dimensions.length,
+            vertical=dimensions.width,
         ),
         EnvelopeView(
             key="front",
             horizontal_axis="width",
             vertical_axis="height",
-            horizontal=envelope.width,
-            vertical=envelope.height,
+            horizontal=dimensions.width,
+            vertical=dimensions.height,
         ),
         EnvelopeView(
             key="side",
             horizontal_axis="length",
             vertical_axis="height",
-            horizontal=envelope.length,
-            vertical=envelope.height,
+            horizontal=dimensions.length,
+            vertical=dimensions.height,
         ),
     )
+
+
+def build_envelope_views(arrangement):
+    return build_dimension_views(arrangement.overall_envelope)
 
 
 def calculate_display_rectangle(view, max_width=220, max_height=130):

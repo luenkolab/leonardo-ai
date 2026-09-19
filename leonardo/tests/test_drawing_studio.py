@@ -67,6 +67,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     arrangement_view_renders = []
     orthographic_view_renders = []
     assembly_drawing_renders = []
+    component_detail_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -135,6 +136,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_assembly_drawings",
         lambda *args: assembly_drawing_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_component_detail_drawings",
+        lambda *args: component_detail_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -227,12 +233,14 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert package_results["Assembly Drawings"] == (
         "Front View · Top View · Side View"
     )
+    assert package_results["Component / Detail Drawings"] == "System Components"
     assert set(package_results.values()) == {
         "Additional geometry data required",
         "Front View · Top View · Side View",
+        "System Components",
         "Not generated",
     }
-    assert list(package_results.values()).count("Not generated") == 3
+    assert list(package_results.values()).count("Not generated") == 2
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
@@ -247,6 +255,9 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert len(assembly_drawing_renders) == 1
     assert assembly_drawing_renders[0][0] is arrangement_view_renders[0][0]
     assert assembly_drawing_renders[0][1] == "en"
+    assert len(component_detail_renders) == 1
+    assert component_detail_renders[0][0] is arrangement_view_renders[0][0]
+    assert component_detail_renders[0][1] == "en"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -524,3 +535,91 @@ def test_assembly_numbering_does_not_mix_concepts():
     assert [(number, component.key) for number, component in second_components] == [
         (1, "second")
     ]
+
+
+def test_component_details_use_component_dimensions_and_existing_view_axes():
+    arrangement = _orthographic_arrangement({"frame": _component_geometry()})
+    original_values = arrangement.model_dump()
+
+    component, views = drawing_studio_page._component_detail_view_data(arrangement)[0]
+    top, front, side = views
+
+    assert component.key == "frame"
+    assert (top.horizontal_axis, top.vertical_axis) == ("length", "width")
+    assert (front.horizontal_axis, front.vertical_axis) == ("width", "height")
+    assert (side.horizontal_axis, side.vertical_axis) == ("length", "height")
+    assert (top.horizontal.value, top.vertical.value) == (
+        Decimal("200"),
+        Decimal("100"),
+    )
+    assert (front.horizontal.value, front.vertical.value) == (
+        Decimal("100"),
+        Decimal("50"),
+    )
+    assert (side.horizontal.value, side.vertical.value) == (
+        Decimal("200"),
+        Decimal("50"),
+    )
+    top_markup = drawing_studio_page._general_arrangement_view_markup(
+        top, "Top View", "Missing geometry"
+    )
+    assert ">200 mm<" in top_markup
+    assert ">100 mm<" in top_markup
+    assert ">1000 mm<" not in top_markup
+    assert arrangement.model_dump() == original_values
+
+
+def test_component_detail_partial_dimensions_do_not_create_invented_views():
+    arrangement = _orthographic_arrangement(
+        {
+            "top_only": _component_geometry(height=None),
+            "no_complete_view": _component_geometry(
+                width=None, height=None, x=None, y=None, z=None
+            ),
+        }
+    )
+    details = drawing_studio_page._component_detail_view_data(arrangement)
+    top_only_views = details[0][1]
+    incomplete_views = details[1][1]
+
+    assert drawing_studio_page.calculate_display_rectangle(top_only_views[0]) is not None
+    assert drawing_studio_page.calculate_display_rectangle(top_only_views[1]) is None
+    assert drawing_studio_page.calculate_display_rectangle(top_only_views[2]) is None
+    assert all(
+        drawing_studio_page.calculate_display_rectangle(view) is None
+        for view in incomplete_views
+    )
+    assert all(
+        "<rect" not in drawing_studio_page._general_arrangement_view_markup(
+            view, "Detail View", "Missing geometry"
+        )
+        for view in incomplete_views
+    )
+
+
+def test_component_details_ignore_positions_and_do_not_mix_data():
+    first = _orthographic_arrangement(
+        {
+            "first": _component_geometry(x="0", y="0", z="0"),
+            "second": _component_geometry(
+                length="300",
+                width="150",
+                height="75",
+                x="900",
+                y="400",
+                z="300",
+            ),
+        }
+    )
+    moved_first = _orthographic_arrangement(
+        {"first": _component_geometry(x="700", y="300", z="200")}
+    )
+
+    first_details = drawing_studio_page._component_detail_view_data(first)
+    moved_details = drawing_studio_page._component_detail_view_data(moved_first)
+
+    assert [component.key for component, _views in first_details] == ["first", "second"]
+    assert [component.key for component, _views in moved_details] == ["first"]
+    assert first_details[0][1] == moved_details[0][1]
+    assert first_details[0][1][0].horizontal.value == Decimal("200")
+    assert first_details[1][1][0].horizontal.value == Decimal("300")

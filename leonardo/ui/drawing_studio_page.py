@@ -29,6 +29,7 @@ from services.engineering_parameters_service import (
 from services.general_arrangement_service import (
     SUPPORTED_LENGTH_UNITS,
     build_component_projections,
+    build_dimension_views,
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
@@ -604,6 +605,44 @@ def _render_assembly_drawings(general_arrangement, language):
         )
 
 
+def _component_detail_view_data(general_arrangement):
+    return tuple(
+        (component, build_dimension_views(component.dimensions))
+        for component in general_arrangement.components
+        if any(
+            (
+                component.dimensions.length,
+                component.dimensions.width,
+                component.dimensions.height,
+            )
+        )
+    )
+
+
+def _render_component_detail_drawings(general_arrangement, language):
+    missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
+    for component, views in _component_detail_view_data(general_arrangement):
+        with st.container(border=True):
+            st.markdown(f"**{html.escape(component.name)}**")
+            if not any(view.horizontal and view.vertical for view in views):
+                st.caption(missing_message)
+                continue
+            columns = st.columns(3)
+            for column, view in zip(columns, views):
+                with column:
+                    st.markdown(
+                        _general_arrangement_view_markup(
+                            view,
+                            translate(
+                                f"drawing_studio.ga.{view.key}_view",
+                                language,
+                            ),
+                            missing_message,
+                        ),
+                        unsafe_allow_html=True,
+                    )
+
+
 def render_drawing_studio():
     language = get_current_language()
     concept_id = get_current_concept_id()
@@ -730,6 +769,8 @@ def render_drawing_studio():
                     translate(f"drawing_studio.ga.{key}_view", language)
                     for key in ("front", "top", "side")
                 )
+            elif item == "component_detail_drawings":
+                package_content = translate("concept.system_components", language)
             else:
                 package_content = translate("drawing_studio.not_generated", language)
             render_result_box(
@@ -759,6 +800,11 @@ def render_drawing_studio():
                 )
             elif item == "assembly_drawings":
                 _render_assembly_drawings(
+                    general_arrangement,
+                    language,
+                )
+            elif item == "component_detail_drawings":
+                _render_component_detail_drawings(
                     general_arrangement,
                     language,
                 )
