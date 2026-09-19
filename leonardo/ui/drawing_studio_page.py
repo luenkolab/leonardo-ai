@@ -10,6 +10,7 @@ from application.concepts import (
 from application.engineering_parameters import (
     load_engineering_parameters_for_viewer,
     save_component_geometry_values,
+    save_connection_values,
     save_engineering_parameter_values,
     save_overall_envelope_values,
 )
@@ -643,6 +644,108 @@ def _render_component_detail_drawings(general_arrangement, language):
                     )
 
 
+def _connection_markup(connection, component_names, language):
+    name_a = html.escape(component_names[connection["component_a"]])
+    name_b = html.escape(component_names[connection["component_b"]])
+    rows = [
+        f"<div><strong>{name_a} ↔ {name_b}</strong></div>",
+        "<div><strong>"
+        f"{html.escape(translate('drawing_studio.connections.connection_type', language))}:"
+        "</strong> "
+        f"{html.escape(connection['connection_type'])}</div>",
+    ]
+    for field in ("fastener_type", "quantity", "note"):
+        if connection[field] is not None:
+            rows.append(
+                "<div><strong>"
+                f"{html.escape(translate(f'drawing_studio.connections.{field}', language))}:"
+                "</strong> "
+                f"{html.escape(str(connection[field]))}</div>"
+            )
+    return (
+        '<div style="border:1px solid rgba(73, 112, 140, 0.32); '
+        'border-radius:10px; padding:12px; margin-top:10px;">'
+        f"{''.join(rows)}</div>"
+    )
+
+
+def _render_connections_fasteners(
+    concept_id,
+    general_arrangement,
+    connections,
+    language,
+):
+    component_names = {
+        component.key: component.name for component in general_arrangement.components
+    }
+    component_keys = tuple(component_names)
+    if len(component_keys) >= 2:
+        component_columns = st.columns(2)
+        component_a = component_columns[0].selectbox(
+            translate("drawing_studio.connections.component_a", language),
+            component_keys,
+            format_func=component_names.get,
+            key=f"connection_component_a_{concept_id}",
+        )
+        component_b = component_columns[1].selectbox(
+            translate("drawing_studio.connections.component_b", language),
+            component_keys,
+            index=1,
+            format_func=component_names.get,
+            key=f"connection_component_b_{concept_id}",
+        )
+        detail_columns = st.columns(3)
+        connection_type = detail_columns[0].text_input(
+            translate("drawing_studio.connections.connection_type", language),
+            key=f"connection_type_{concept_id}",
+        )
+        fastener_type = detail_columns[1].text_input(
+            translate("drawing_studio.connections.fastener_type", language),
+            key=f"connection_fastener_type_{concept_id}",
+        )
+        quantity = detail_columns[2].text_input(
+            translate("drawing_studio.connections.quantity", language),
+            key=f"connection_quantity_{concept_id}",
+        )
+        note = st.text_input(
+            translate("drawing_studio.connections.note", language),
+            key=f"connection_note_{concept_id}",
+        )
+        if st.button(
+            translate("engineering_parameters.save", language),
+            key=f"connection_save_{concept_id}",
+            type="secondary",
+        ):
+            try:
+                save_connection_values(
+                    concept_id,
+                    component_a,
+                    component_b,
+                    connection_type,
+                    fastener_type,
+                    quantity,
+                    note,
+                )
+            except ValueError:
+                st.error(translate("drawing_studio.connections.invalid", language))
+            else:
+                st.rerun()
+    else:
+        st.caption(
+            translate("drawing_studio.connections.requires_two_components", language)
+        )
+
+    for connection in connections:
+        if (
+            connection["component_a"] in component_names
+            and connection["component_b"] in component_names
+        ):
+            st.markdown(
+                _connection_markup(connection, component_names, language),
+                unsafe_allow_html=True,
+            )
+
+
 def render_drawing_studio():
     language = get_current_language()
     concept_id = get_current_concept_id()
@@ -745,12 +848,10 @@ def render_drawing_studio():
         "connections_fasteners",
         "bill_of_materials",
     )
-    general_arrangement = build_general_arrangement(
-        concept_data,
-        validate_parameter_set(
-            get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
-        ),
+    parameter_set = validate_parameter_set(
+        get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
+    general_arrangement = build_general_arrangement(concept_data, parameter_set)
     general_arrangement_status = translate(
         (
             "drawing_studio.geometry_data_prepared"
@@ -771,6 +872,11 @@ def render_drawing_studio():
                 )
             elif item == "component_detail_drawings":
                 package_content = translate("concept.system_components", language)
+            elif item == "connections_fasteners":
+                package_content = (
+                    f"{translate('drawing_studio.connections.component_a', language)} "
+                    f"↔ {translate('drawing_studio.connections.component_b', language)}"
+                )
             else:
                 package_content = translate("drawing_studio.not_generated", language)
             render_result_box(
@@ -806,5 +912,12 @@ def render_drawing_studio():
             elif item == "component_detail_drawings":
                 _render_component_detail_drawings(
                     general_arrangement,
+                    language,
+                )
+            elif item == "connections_fasteners":
+                _render_connections_fasteners(
+                    concept_id,
+                    general_arrangement,
+                    parameter_set["connections"],
                     language,
                 )

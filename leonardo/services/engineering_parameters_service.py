@@ -90,6 +90,7 @@ def build_empty_parameter_set():
         "universal": build_universal_parameters(),
         "project_specific": [],
         "component_geometry": {},
+        "connections": [],
     }
 
 
@@ -134,10 +135,48 @@ def validate_parameter_set(value):
             raise ValueError(f"Unsupported component geometry unit for {key}")
         geometry["unit"] = unit.casefold()
         component_geometry[key] = geometry
+    raw_connections = value.get("connections", [])
+    if not isinstance(raw_connections, list):
+        raise ValueError("Connections must be a JSON array")
+    connections = []
+    for raw_connection in raw_connections:
+        if not isinstance(raw_connection, dict):
+            raise ValueError("Connection must be a JSON object")
+        connection_type = _optional_text(raw_connection.get("connection_type"))
+        if connection_type is None:
+            raise ValueError("Connection type is required")
+        raw_quantity = raw_connection.get("quantity")
+        if raw_quantity is None or raw_quantity == "":
+            quantity = None
+        elif (
+            isinstance(raw_quantity, bool)
+            or not str(raw_quantity).strip().isdigit()
+            or int(raw_quantity) <= 0
+        ):
+            raise ValueError("Connection quantity must be a positive integer")
+        else:
+            quantity = int(raw_quantity)
+        connections.append(
+            {
+                "component_a": normalize_parameter_key(
+                    raw_connection.get("component_a")
+                ),
+                "component_b": normalize_parameter_key(
+                    raw_connection.get("component_b")
+                ),
+                "connection_type": connection_type,
+                "fastener_type": _optional_text(
+                    raw_connection.get("fastener_type")
+                ),
+                "quantity": quantity,
+                "note": _optional_text(raw_connection.get("note")),
+            }
+        )
     return {
         "universal": _deduplicate_parameters(universal, "user"),
         "project_specific": _deduplicate_parameters(project_specific, "ai"),
         "component_geometry": component_geometry,
+        "connections": connections,
     }
 
 
@@ -177,6 +216,7 @@ def merge_project_suggestions(parameter_set, suggestions):
         "universal": current["universal"],
         "project_specific": merged,
         "component_geometry": current["component_geometry"],
+        "connections": current["connections"],
     }
 
 

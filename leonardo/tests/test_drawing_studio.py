@@ -68,6 +68,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     orthographic_view_renders = []
     assembly_drawing_renders = []
     component_detail_renders = []
+    connection_renders = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -141,6 +142,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "_render_component_detail_drawings",
         lambda *args: component_detail_renders.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_connections_fasteners",
+        lambda *args: connection_renders.append(args),
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -234,13 +240,15 @@ def test_studio_uses_current_concept_and_only_modern_references(
         "Front View · Top View · Side View"
     )
     assert package_results["Component / Detail Drawings"] == "System Components"
+    assert package_results["Connections & Fasteners"] == "Component A ↔ Component B"
     assert set(package_results.values()) == {
         "Additional geometry data required",
         "Front View · Top View · Side View",
         "System Components",
+        "Component A ↔ Component B",
         "Not generated",
     }
-    assert list(package_results.values()).count("Not generated") == 2
+    assert list(package_results.values()).count("Not generated") == 1
     assert len(envelope_input_renders) == 1
     assert envelope_input_renders[0][0] == 91
     assert envelope_input_renders[0][2] == "en"
@@ -258,6 +266,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert len(component_detail_renders) == 1
     assert component_detail_renders[0][0] is arrangement_view_renders[0][0]
     assert component_detail_renders[0][1] == "en"
+    assert len(connection_renders) == 1
+    assert connection_renders[0][0] == 91
+    assert connection_renders[0][1] is arrangement_view_renders[0][0]
+    assert connection_renders[0][2] == []
+    assert connection_renders[0][3] == "en"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -623,3 +636,41 @@ def test_component_details_ignore_positions_and_do_not_mix_data():
     assert first_details[0][1] == moved_details[0][1]
     assert first_details[0][1][0].horizontal.value == Decimal("200")
     assert first_details[1][1][0].horizontal.value == Decimal("300")
+
+
+def test_connection_presentation_shows_only_saved_optional_fields():
+    component_names = {"frame": "Main Frame", "cover": "Safety Cover"}
+    complete = {
+        "component_a": "frame",
+        "component_b": "cover",
+        "connection_type": "Bolted flange",
+        "fastener_type": "M8 bolt",
+        "quantity": 4,
+        "note": "Service removable",
+    }
+    minimal = {
+        "component_a": "cover",
+        "component_b": "frame",
+        "connection_type": "Welded",
+        "fastener_type": None,
+        "quantity": None,
+        "note": None,
+    }
+
+    complete_markup = drawing_studio_page._connection_markup(
+        complete, component_names, "en"
+    )
+    minimal_markup = drawing_studio_page._connection_markup(
+        minimal, component_names, "en"
+    )
+
+    assert "Main Frame ↔ Safety Cover" in complete_markup
+    assert "Bolted flange" in complete_markup
+    assert "M8 bolt" in complete_markup
+    assert "Quantity:</strong> 4" in complete_markup
+    assert "Service removable" in complete_markup
+    assert "Safety Cover ↔ Main Frame" in minimal_markup
+    assert "Welded" in minimal_markup
+    assert "Fastener Type" not in minimal_markup
+    assert "Quantity" not in minimal_markup
+    assert "Note" not in minimal_markup

@@ -1,5 +1,6 @@
 from threading import Lock
 
+from application.concepts import load_concept
 from database import (
     get_engineering_parameter_set,
     get_engineering_parameter_set_source_language,
@@ -16,6 +17,7 @@ from services.engineering_parameters_service import (
 )
 from services.general_arrangement_service import (
     SUPPORTED_LENGTH_UNITS,
+    build_general_arrangement,
     normalize_known_value,
     normalize_length_value,
 )
@@ -187,5 +189,50 @@ def save_component_geometry_values(
         }
     else:
         canonical["component_geometry"].pop(key, None)
+    save_engineering_parameter_set(concept_id, canonical)
+    return canonical
+
+
+def save_connection_values(
+    concept_id,
+    component_a,
+    component_b,
+    connection_type,
+    fastener_type=None,
+    quantity=None,
+    note=None,
+):
+    """Append one explicit connection between components of the current concept."""
+    canonical = validate_parameter_set(
+        get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
+    )
+    concept_data = load_concept(concept_id)
+    if concept_data is None:
+        raise ValueError("Concept is required")
+    valid_keys = {
+        component.key
+        for component in build_general_arrangement(
+            concept_data,
+            canonical,
+        ).components
+    }
+    key_a = normalize_parameter_key(component_a)
+    key_b = normalize_parameter_key(component_b)
+    if key_a not in valid_keys or key_b not in valid_keys:
+        raise ValueError("Connection components must belong to the current concept")
+    if key_a == key_b:
+        raise ValueError("A component cannot connect to itself")
+
+    canonical["connections"].append(
+        {
+            "component_a": key_a,
+            "component_b": key_b,
+            "connection_type": connection_type,
+            "fastener_type": fastener_type,
+            "quantity": quantity,
+            "note": note,
+        }
+    )
+    canonical = validate_parameter_set(canonical)
     save_engineering_parameter_set(concept_id, canonical)
     return canonical

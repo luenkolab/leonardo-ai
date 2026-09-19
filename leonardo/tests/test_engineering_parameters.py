@@ -4,10 +4,12 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 
 import database
+import pytest
 from application import engineering_parameters as parameter_application
 from i18n import LANGUAGES, TRANSLATIONS
 from services import concept_translation_service
 from services import engineering_parameters_service as service
+from services.general_arrangement_service import build_general_arrangement
 from ui import drawing_studio_page
 
 
@@ -125,6 +127,137 @@ def test_component_geometry_survives_validation_save_and_load(
     assert loaded["universal"][0]["value"] == "SI"
     assert loaded["project_specific"][0]["value"] == "25"
     assert "unknown_top_level" not in loaded
+
+
+def _component_keys(concept_data, parameter_set=None):
+    arrangement = build_general_arrangement(
+        concept_data,
+        parameter_set or service.build_empty_parameter_set(),
+    )
+    return [component.key for component in arrangement.components]
+
+
+def test_connections_survive_validation_save_load_without_losing_parameters(
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Connected project")
+    parameter_set = service.build_empty_parameter_set()
+    component_a, component_b = _component_keys(valid_concept)[:2]
+    parameter_set["universal"][0]["value"] = "SI"
+    parameter_set["project_specific"] = [_project_parameter("payload", "25")]
+    parameter_set["component_geometry"] = {
+        component_a: {
+            "length": "100",
+            "width": None,
+            "height": None,
+            "x": None,
+            "y": None,
+            "z": None,
+            "unit": "mm",
+        }
+    }
+    database.save_engineering_parameter_set(concept_id, parameter_set)
+
+    parameter_application.save_connection_values(
+        concept_id,
+        component_a,
+        component_b,
+        "Bolted flange",
+        "M8 bolt",
+        "4",
+        "User supplied connection",
+    )
+    loaded = service.validate_parameter_set(
+        database.get_engineering_parameter_set(concept_id)
+    )
+
+    assert loaded["connections"] == [
+        {
+            "component_a": component_a,
+            "component_b": component_b,
+            "connection_type": "Bolted flange",
+            "fastener_type": "M8 bolt",
+            "quantity": 4,
+            "note": "User supplied connection",
+        }
+    ]
+    assert loaded["universal"][0]["value"] == "SI"
+    assert loaded["project_specific"][0]["value"] == "25"
+    assert loaded["component_geometry"][component_a]["length"] == "100"
+
+
+def test_connection_rejects_invalid_or_identical_component_keys(
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Connection references")
+    component_a, component_b = _component_keys(valid_concept)[:2]
+
+    with pytest.raises(ValueError):
+        parameter_application.save_connection_values(
+            concept_id, "missing_component", component_b, "Welded"
+        )
+    with pytest.raises(ValueError):
+        parameter_application.save_connection_values(
+            concept_id, component_a, component_a, "Welded"
+        )
+
+
+def test_connection_quantity_accepts_only_positive_integer_or_none(
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Connection quantity")
+    component_a, component_b = _component_keys(valid_concept)[:2]
+
+    parameter_application.save_connection_values(
+        concept_id, component_a, component_b, "Welded", quantity=None
+    )
+    parameter_application.save_connection_values(
+        concept_id, component_a, component_b, "Bolted", quantity="3"
+    )
+    for invalid_quantity in (0, "0", -1, "1.5", True):
+        with pytest.raises(ValueError):
+            parameter_application.save_connection_values(
+                concept_id,
+                component_a,
+                component_b,
+                "Invalid quantity",
+                quantity=invalid_quantity,
+            )
+
+    stored = database.get_engineering_parameter_set(concept_id)
+    assert [connection["quantity"] for connection in stored["connections"]] == [
+        None,
+        3,
+    ]
+
+
+def test_connections_remain_scoped_to_their_concepts(
+    temporary_database,
+    valid_concept,
+):
+    first_concept = copy.deepcopy(valid_concept)
+    first_concept["system_components"] = ["First frame", "First cover"]
+    second_concept = copy.deepcopy(valid_concept)
+    second_concept["system_components"] = ["Second frame", "Second cover"]
+    first_id = _save_test_concept(first_concept, "First connections")
+    second_id = _save_test_concept(second_concept, "Second connections")
+    first_keys = _component_keys(first_concept)
+    second_keys = _component_keys(second_concept)
+
+    parameter_application.save_connection_values(
+        first_id, first_keys[0], first_keys[1], "First connection"
+    )
+    parameter_application.save_connection_values(
+        second_id, second_keys[0], second_keys[1], "Second connection"
+    )
+
+    first = database.get_engineering_parameter_set(first_id)["connections"]
+    second = database.get_engineering_parameter_set(second_id)["connections"]
+    assert first[0]["component_a"] == "first_frame"
+    assert second[0]["component_a"] == "second_frame"
 
 
 def test_repeated_suggestions_preserve_confirmed_and_user_edited_values():
