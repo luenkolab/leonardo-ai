@@ -517,6 +517,16 @@ def _orthographic_view_data(general_arrangement):
     )
 
 
+def _numbered_components(general_arrangement):
+    return tuple(enumerate(general_arrangement.components, start=1))
+
+
+def _component_names(general_arrangement):
+    return {
+        component.key: component.name for component in general_arrangement.components
+    }
+
+
 def _render_projected_views(view_data, language, assembly_item_numbers=None):
     missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
     outside_components = set()
@@ -556,25 +566,10 @@ def _render_orthographic_views(general_arrangement, language):
 
 
 def _assembly_view_data(general_arrangement):
-    view_data = _orthographic_view_data(general_arrangement)
-    visible_keys = {
-        projection.component_key
-        for _view, projections in view_data
-        for projection in projections
-        if not projection.out_of_envelope
-    }
-    numbered_components = tuple(
-        (number, component)
-        for number, component in enumerate(
-            (
-                component
-                for component in general_arrangement.components
-                if component.key in visible_keys
-            ),
-            start=1,
-        )
+    return (
+        _orthographic_view_data(general_arrangement),
+        _numbered_components(general_arrangement),
     )
-    return view_data, numbered_components
 
 
 def _assembly_legend_markup(numbered_components, title):
@@ -675,9 +670,7 @@ def _render_connections_fasteners(
     connections,
     language,
 ):
-    component_names = {
-        component.key: component.name for component in general_arrangement.components
-    }
+    component_names = _component_names(general_arrangement)
     component_keys = tuple(component_names)
     if len(component_keys) >= 2:
         component_columns = st.columns(2)
@@ -770,15 +763,13 @@ def _structured_component_metadata(concept_data, components):
 
 
 def _build_bom_rows(general_arrangement, concept_data, connections):
-    component_names = {
-        component.key: component.name for component in general_arrangement.components
-    }
+    component_names = _component_names(general_arrangement)
     metadata = _structured_component_metadata(
         concept_data,
         general_arrangement.components,
     )
     rows = []
-    for item_number, component in enumerate(general_arrangement.components, start=1):
+    for item_number, component in _numbered_components(general_arrangement):
         connection_summaries = []
         notes = []
         component_metadata = metadata.get(component.key, {})

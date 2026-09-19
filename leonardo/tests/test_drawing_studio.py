@@ -499,14 +499,14 @@ def test_assembly_views_reuse_orthographic_projections_and_stable_numbering():
     ]
     assert [
         (number, component.key) for number, component in numbered_components
-    ] == [(1, "main_frame"), (2, "drive_unit")]
+    ] == [(1, "main_frame"), (2, "incomplete"), (3, "drive_unit")]
     assert numbered_components == drawing_studio_page._assembly_view_data(
         arrangement
     )[1]
     assert arrangement.model_dump() == original_values
 
 
-def test_assembly_markers_and_legend_omit_unrenderable_components():
+def test_assembly_markers_omit_unrenderable_components_without_losing_identity():
     arrangement = _orthographic_arrangement(
         {
             "main_frame": _component_geometry(),
@@ -543,8 +543,109 @@ def test_assembly_markers_and_legend_omit_unrenderable_components():
     assert 'data-component-key="incomplete"' not in markup
     assert 'data-component-key="outside"' not in markup
     assert "1 — Main Frame" in legend
-    assert "Incomplete" not in legend
-    assert "Outside" not in legend
+    assert "2 — Incomplete" in legend
+    assert "3 — Outside" in legend
+
+
+def test_drawing_package_keeps_component_and_connection_identity_across_sections():
+    arrangement = _orthographic_arrangement(
+        {
+            "frame": _component_geometry(),
+            "partial": _component_geometry(
+                width=None, height=None, y=None, z=None
+            ),
+            "outside": _component_geometry(
+                length="100", x="950", y="450", z="360"
+            ),
+        },
+        [
+            {"key": "frame", "name": "Main Frame"},
+            {"key": "partial", "name": "Partial Bracket"},
+            {"key": "outside", "name": "Outside Guard"},
+        ],
+    )
+    connection = {
+        "component_a": "partial",
+        "component_b": "outside",
+        "connection_type": "Bolted",
+        "fastener_type": "M8 bolt",
+        "quantity": 4,
+        "note": "Service removable",
+    }
+
+    orthographic, assembly_components = drawing_studio_page._assembly_view_data(
+        arrangement
+    )
+    bom_rows = drawing_studio_page._build_bom_rows(
+        arrangement,
+        {},
+        [connection],
+    )
+    component_names = drawing_studio_page._component_names(arrangement)
+
+    expected_identity = [
+        (1, "frame", "Main Frame"),
+        (2, "partial", "Partial Bracket"),
+        (3, "outside", "Outside Guard"),
+    ]
+    assert [
+        (number, component.key, component.name)
+        for number, component in assembly_components
+    ] == expected_identity
+    assert [
+        (row["item"], row["component_key"], row["component"])
+        for row in bom_rows
+    ] == expected_identity
+    assert component_names == {
+        "frame": "Main Frame",
+        "partial": "Partial Bracket",
+        "outside": "Outside Guard",
+    }
+    assert {
+        (projection.component_key, projection.component_name)
+        for _view, projections in orthographic
+        for projection in projections
+    } == {
+        ("frame", "Main Frame"),
+        ("outside", "Outside Guard"),
+    }
+    assert [
+        (component.key, component.name)
+        for component, _views in drawing_studio_page._component_detail_view_data(
+            arrangement
+        )
+    ] == [
+        ("frame", "Main Frame"),
+        ("partial", "Partial Bracket"),
+        ("outside", "Outside Guard"),
+    ]
+
+    connection_markup = drawing_studio_page._connection_markup(
+        connection,
+        component_names,
+        "en",
+    )
+    partial_row = bom_rows[1]
+    outside_row = bom_rows[2]
+    assert "Partial Bracket ↔ Outside Guard" in connection_markup
+    assert "Bolted" in connection_markup
+    assert "M8 bolt" in connection_markup
+    assert "Quantity:</strong> 4" in connection_markup
+    assert "Service removable" in connection_markup
+    assert partial_row["connections"] == (
+        "Bolted · M8 bolt · ×4 · ↔ Outside Guard",
+    )
+    assert partial_row["notes"] == ("Service removable",)
+    assert outside_row["connections"] == (
+        "Bolted · M8 bolt · ×4 · ↔ Partial Bracket",
+    )
+    assert outside_row["notes"] == ("Service removable",)
+    assert all(
+        projection.out_of_envelope
+        for _view, projections in orthographic
+        for projection in projections
+        if projection.component_key == "outside"
+    )
 
 
 def test_assembly_numbering_does_not_mix_concepts():
