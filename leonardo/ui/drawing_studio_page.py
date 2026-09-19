@@ -34,7 +34,6 @@ from services.general_arrangement_service import (
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
-    has_prepared_geometry,
 )
 from ui.components import render_generated_section_heading, render_result_box
 from ui.concept_page import _render_concept_image_slot, _safe_pdf_filename
@@ -125,6 +124,22 @@ def _render_parameter_rows(
         st.space("small" if parameter is parameters[-1] else "xxsmall")
 
     return rendered_values
+
+
+def _render_system_components(concept_data, language):
+    components = []
+    for component in concept_data.get("system_components", []):
+        if isinstance(component, str) and component.strip():
+            components.append(component.strip())
+        elif isinstance(component, dict):
+            name = str(component.get("name") or "").strip()
+            if name:
+                components.append(name)
+    if not components:
+        return
+    st.markdown(f"**{translate('concept.system_components', language)}**")
+    for component in components:
+        st.write("•", component)
 
 
 def _render_engineering_parameters(
@@ -220,6 +235,7 @@ def _render_engineering_parameters(
         language,
         False,
     )
+    _render_system_components(concept_data, language)
 
 
 def _get_current_category(concept_id):
@@ -494,7 +510,9 @@ def _general_arrangement_view_markup(
 def _render_general_arrangement_views(general_arrangement, language):
     missing_message = translate("drawing_studio.ga.insufficient_view_data", language)
     outside_components = set()
-    for view in build_envelope_views(general_arrangement):
+    views = {view.key: view for view in build_envelope_views(general_arrangement)}
+    for key in ("front", "top", "side"):
+        view = views[key]
         projections = build_component_projections(general_arrangement, view)
         outside_components.update(
             projection.component_name
@@ -580,33 +598,12 @@ def _assembly_view_data(general_arrangement):
     )
 
 
-def _assembly_legend_markup(numbered_components, title):
-    items = "".join(
-        f"<div>{number} — {html.escape(component.name)}</div>"
-        for number, component in numbered_components
-    )
-    return (
-        '<div style="border:1px solid rgba(73, 112, 140, 0.32); '
-        'border-radius:10px; padding:12px; margin-top:10px;">'
-        f'<div style="font-weight:650; margin-bottom:6px;">{html.escape(title)}</div>'
-        f"{items}</div>"
-    )
-
-
 def _render_assembly_drawings(general_arrangement, language):
     view_data, numbered_components = _assembly_view_data(general_arrangement)
     item_numbers = {
         component.key: number for number, component in numbered_components
     }
     _render_projected_views(view_data, language, item_numbers)
-    if numbered_components:
-        st.markdown(
-            _assembly_legend_markup(
-                numbered_components,
-                translate("concept.system_components", language),
-            ),
-            unsafe_allow_html=True,
-        )
 
 
 def _component_detail_view_data(general_arrangement):
@@ -632,7 +629,11 @@ def _render_component_detail_drawings(general_arrangement, language):
                 st.caption(missing_message)
                 continue
             columns = st.columns(3)
-            for column, view in zip(columns, views):
+            views_by_key = {view.key: view for view in views}
+            ordered_views = tuple(
+                views_by_key[key] for key in ("front", "top", "side")
+            )
+            for column, view in zip(columns, ordered_views):
                 with column:
                     st.markdown(
                         _general_arrangement_view_markup(
@@ -870,6 +871,87 @@ def _render_bill_of_materials(general_arrangement, concept_data, connections, la
         ),
         unsafe_allow_html=True,
     )
+
+
+def _has_usable_envelope_view(general_arrangement):
+    return any(
+        calculate_display_rectangle(view) is not None
+        for view in build_envelope_views(general_arrangement)
+    )
+
+
+def _has_usable_component_detail_view(general_arrangement):
+    return any(
+        calculate_display_rectangle(view) is not None
+        for _component, views in _component_detail_view_data(general_arrangement)
+        for view in views
+    )
+
+
+def _render_drawing_package_sections(
+    concept_id,
+    concept_data,
+    general_arrangement,
+    connections,
+    language,
+):
+    geometry_missing = translate(
+        "drawing_studio.additional_geometry_data_required",
+        language,
+    )
+    component_names = _component_names(general_arrangement)
+    visible_connections = [
+        connection
+        for connection in connections
+        if _connection_display_data(connection, component_names) is not None
+    ]
+
+    for item in _DRAWING_PACKAGE_ITEMS:
+        with st.expander(
+            translate(f"drawing_studio.{item}", language),
+            expanded=False,
+            key=f"drawing_package_{item}",
+        ):
+            if item == "general_arrangement":
+                if _has_usable_envelope_view(general_arrangement):
+                    _render_general_arrangement_views(general_arrangement, language)
+                else:
+                    st.caption(geometry_missing)
+            elif item == "orthographic_views":
+                if _has_usable_envelope_view(general_arrangement):
+                    _render_orthographic_views(general_arrangement, language)
+                else:
+                    st.caption(geometry_missing)
+            elif item == "assembly_drawings":
+                if _has_usable_envelope_view(general_arrangement):
+                    _render_assembly_drawings(general_arrangement, language)
+                else:
+                    st.caption(geometry_missing)
+            elif item == "component_detail_drawings":
+                if _has_usable_component_detail_view(general_arrangement):
+                    _render_component_detail_drawings(general_arrangement, language)
+                else:
+                    st.caption(geometry_missing)
+            elif item == "connections_fasteners":
+                if visible_connections:
+                    _render_connections_fasteners(
+                        concept_id,
+                        general_arrangement,
+                        visible_connections,
+                        language,
+                    )
+                else:
+                    st.caption(translate("drawing_studio.not_generated", language))
+            elif item == "bill_of_materials":
+                if general_arrangement.components:
+                    _render_bill_of_materials(
+                        general_arrangement,
+                        concept_data,
+                        connections,
+                        language,
+                    )
+                else:
+                    st.caption(translate("drawing_studio.not_generated", language))
 
 
 def _export_view_group(view_data, language, title=None, assembly_item_numbers=None):
@@ -1144,78 +1226,22 @@ def render_drawing_studio():
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
     general_arrangement = build_general_arrangement(concept_data, parameter_set)
-    general_arrangement_status = translate(
-        (
-            "drawing_studio.geometry_data_prepared"
-            if has_prepared_geometry(general_arrangement)
-            else "drawing_studio.additional_geometry_data_required"
-        ),
-        language,
-    )
-    _render_drawing_package_export(
+    _render_drawing_package_sections(
+        concept_id,
         concept_data,
-        category,
         general_arrangement,
         parameter_set["connections"],
         language,
     )
-    package_columns = st.columns(2)
-    for index, item in enumerate(_DRAWING_PACKAGE_ITEMS):
-        with package_columns[index % 2]:
-            if item == "general_arrangement":
-                package_content = general_arrangement_status
-            elif item in {"orthographic_views", "assembly_drawings"}:
-                package_content = " · ".join(
-                    translate(f"drawing_studio.ga.{key}_view", language)
-                    for key in ("front", "top", "side")
-                )
-            elif item == "component_detail_drawings":
-                package_content = translate("concept.system_components", language)
-            elif item == "connections_fasteners":
-                package_content = (
-                    f"{translate('drawing_studio.connections.component_a', language)} "
-                    f"↔ {translate('drawing_studio.connections.component_b', language)}"
-                )
-            elif item == "bill_of_materials":
-                package_content = translate("concept.system_components", language)
-            else:
-                package_content = translate("drawing_studio.not_generated", language)
-            render_result_box(
-                translate(f"drawing_studio.{item}", language),
-                package_content,
-                visual_variant="blue",
-            )
-            if item == "general_arrangement":
-                _render_general_arrangement_views(
-                    general_arrangement,
-                    language,
-                )
-            elif item == "orthographic_views":
-                _render_orthographic_views(
-                    general_arrangement,
-                    language,
-                )
-            elif item == "assembly_drawings":
-                _render_assembly_drawings(
-                    general_arrangement,
-                    language,
-                )
-            elif item == "component_detail_drawings":
-                _render_component_detail_drawings(
-                    general_arrangement,
-                    language,
-                )
-            elif item == "connections_fasteners":
-                _render_connections_fasteners(
-                    concept_id,
-                    general_arrangement,
-                    parameter_set["connections"],
-                    language,
-                )
-            elif item == "bill_of_materials":
-                _render_bill_of_materials(
-                    general_arrangement,
-                    concept_data,
-                    parameter_set["connections"],
-                    language,
-                )
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="right",
+        vertical_alignment="center",
+    ):
+        _render_drawing_package_export(
+            concept_data,
+            category,
+            general_arrangement,
+            parameter_set["connections"],
+            language,
+        )

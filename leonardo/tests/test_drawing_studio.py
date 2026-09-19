@@ -72,6 +72,9 @@ def test_studio_uses_current_concept_and_only_modern_references(
     component_detail_renders = []
     connection_renders = []
     bom_renders = []
+    expanders = []
+    containers = []
+    drawing_package_order = []
     concept_images = {
         "leonardo_concept_1": (1, 91, "leonardo_concept_1", "prompt", b"old", "date", 0),
         "modern_concept_1": (2, 91, "modern_concept_1", "prompt", b"one", "date", 0),
@@ -85,7 +88,18 @@ def test_studio_uses_current_concept_and_only_modern_references(
         state.LANGUAGE: "en",
     }
     monkeypatch.setattr(state.st, "session_state", session_state)
-    monkeypatch.setattr(drawing_studio_page.st, "container", lambda **kwargs: nullcontext())
+    def container(**kwargs):
+        containers.append(kwargs)
+        return nullcontext()
+
+    monkeypatch.setattr(drawing_studio_page.st, "container", container)
+
+    def expander(label, **kwargs):
+        expanders.append((label, kwargs))
+        drawing_package_order.append(label)
+        return nullcontext()
+
+    monkeypatch.setattr(drawing_studio_page.st, "expander", expander)
     monkeypatch.setattr(drawing_studio_page.st, "button", lambda *args, **kwargs: False)
     monkeypatch.setattr(drawing_studio_page.st, "caption", lambda *args, **kwargs: None)
     monkeypatch.setattr(drawing_studio_page.st, "space", spaces.append)
@@ -158,6 +172,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
     )
     monkeypatch.setattr(
         drawing_studio_page,
+        "_render_drawing_package_export",
+        lambda *args: drawing_package_order.append("export"),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
         "load_concept_for_viewer",
         lambda concept_id, language: (valid_concept, "en"),
     )
@@ -225,58 +244,41 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert engineering_parameter_renders == [
         (91, valid_concept, "robotics_automation", "en")
     ]
-    package_results = {
-        title: content
-        for title, content, _kwargs in result_boxes
-        if title
-        in {
-            "General Arrangement",
-            "Orthographic Views",
-            "Assembly Drawings",
-            "Component / Detail Drawings",
-            "Connections & Fasteners",
-            "Bill of Materials",
-        }
+    package_titles = {
+        "General Arrangement",
+        "Orthographic Views",
+        "Assembly Drawings",
+        "Component / Detail Drawings",
+        "Connections & Fasteners",
+        "Bill of Materials",
     }
-    assert package_results["General Arrangement"] == (
-        "Additional geometry data required"
-    )
-    assert package_results["Orthographic Views"] == (
-        "Front View · Top View · Side View"
-    )
-    assert package_results["Assembly Drawings"] == (
-        "Front View · Top View · Side View"
-    )
-    assert package_results["Component / Detail Drawings"] == "System Components"
-    assert package_results["Connections & Fasteners"] == "Component A ↔ Component B"
-    assert package_results["Bill of Materials"] == "System Components"
-    assert set(package_results.values()) == {
-        "Additional geometry data required",
-        "Front View · Top View · Side View",
-        "System Components",
-        "Component A ↔ Component B",
+    assert not any(title in package_titles for title, _content, _kwargs in result_boxes)
+    assert [label for label, _kwargs in expanders] == [
+        "General Arrangement",
+        "Orthographic Views",
+        "Assembly Drawings",
+        "Component / Detail Drawings",
+        "Connections & Fasteners",
+        "Bill of Materials",
+    ]
+    assert all(kwargs["expanded"] is False for _label, kwargs in expanders)
+    assert [kwargs["key"] for _label, kwargs in expanders] == [
+        f"drawing_package_{item}" for item in drawing_studio_page._DRAWING_PACKAGE_ITEMS
+    ]
+    assert drawing_package_order[-1] == "export"
+    assert containers[-1] == {
+        "horizontal": True,
+        "horizontal_alignment": "right",
+        "vertical_alignment": "center",
     }
-    assert "Not generated" not in package_results.values()
     assert envelope_input_renders == []
     assert component_input_renders == []
-    assert len(arrangement_view_renders) == 1
-    assert arrangement_view_renders[0][1] == "en"
-    assert len(orthographic_view_renders) == 1
-    assert orthographic_view_renders[0][0] is arrangement_view_renders[0][0]
-    assert orthographic_view_renders[0][1] == "en"
-    assert len(assembly_drawing_renders) == 1
-    assert assembly_drawing_renders[0][0] is arrangement_view_renders[0][0]
-    assert assembly_drawing_renders[0][1] == "en"
-    assert len(component_detail_renders) == 1
-    assert component_detail_renders[0][0] is arrangement_view_renders[0][0]
-    assert component_detail_renders[0][1] == "en"
-    assert len(connection_renders) == 1
-    assert connection_renders[0][0] == 91
-    assert connection_renders[0][1] is arrangement_view_renders[0][0]
-    assert connection_renders[0][2] == []
-    assert connection_renders[0][3] == "en"
+    assert arrangement_view_renders == []
+    assert orthographic_view_renders == []
+    assert assembly_drawing_renders == []
+    assert component_detail_renders == []
+    assert connection_renders == []
     assert len(bom_renders) == 1
-    assert bom_renders[0][0] is arrangement_view_renders[0][0]
     assert bom_renders[0][1] is valid_concept
     assert bom_renders[0][2] == []
     assert bom_renders[0][3] == "en"
@@ -387,6 +389,80 @@ def _component_geometry(**overrides):
     }
     geometry.update(overrides)
     return geometry
+
+
+def test_drawing_package_expanders_keep_existing_renderers_and_bom(monkeypatch):
+    arrangement = _orthographic_arrangement(
+        {
+            "frame": _component_geometry(),
+            "cover": _component_geometry(x="300"),
+        },
+        [
+            {"key": "frame", "name": "Main Frame"},
+            {"key": "cover", "name": "Safety Cover"},
+        ],
+    )
+    concept_data = {"system_components": ["Main Frame", "Safety Cover"]}
+    connections = [
+        {
+            "component_a": "frame",
+            "component_b": "cover",
+            "connection_type": "Bolted",
+            "fastener_type": None,
+            "quantity": None,
+            "note": None,
+        }
+    ]
+    expanders = []
+    calls = []
+
+    def expander(label, **kwargs):
+        expanders.append((label, kwargs))
+        return nullcontext()
+
+    monkeypatch.setattr(drawing_studio_page.st, "expander", expander)
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "render_result_box",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Drawing Package summary cards must not render")
+        ),
+    )
+    for name in (
+        "_render_general_arrangement_views",
+        "_render_orthographic_views",
+        "_render_assembly_drawings",
+        "_render_component_detail_drawings",
+        "_render_connections_fasteners",
+        "_render_bill_of_materials",
+    ):
+        monkeypatch.setattr(
+            drawing_studio_page,
+            name,
+            lambda *args, _name=name: calls.append((_name, args)),
+        )
+
+    drawing_studio_page._render_drawing_package_sections(
+        12,
+        concept_data,
+        arrangement,
+        connections,
+        "en",
+    )
+
+    assert [kwargs["key"] for _label, kwargs in expanders] == [
+        f"drawing_package_{item}" for item in drawing_studio_page._DRAWING_PACKAGE_ITEMS
+    ]
+    assert all(kwargs["expanded"] is False for _label, kwargs in expanders)
+    assert [name for name, _args in calls] == [
+        "_render_general_arrangement_views",
+        "_render_orthographic_views",
+        "_render_assembly_drawings",
+        "_render_component_detail_drawings",
+        "_render_connections_fasteners",
+        "_render_bill_of_materials",
+    ]
+    assert calls[-1][1] == (arrangement, concept_data, connections, "en")
 
 
 def test_orthographic_views_reuse_ga_axes_positions_and_real_dimensions():
@@ -531,17 +607,31 @@ def test_assembly_markers_omit_unrenderable_components_without_losing_identity()
         projections,
         item_numbers,
     )
-    legend = drawing_studio_page._assembly_legend_markup(
-        numbered_components,
-        "System Components",
-    )
-
     assert 'data-assembly-item="1"' in markup
     assert 'data-component-key="incomplete"' not in markup
     assert 'data-component-key="outside"' not in markup
-    assert "1 — Main Frame" in legend
-    assert "2 — Incomplete" in legend
-    assert "3 — Outside" in legend
+
+
+def test_assembly_main_ui_renders_numbered_views_without_component_legend(monkeypatch):
+    arrangement = _orthographic_arrangement({"frame": _component_geometry()})
+    projected = []
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_projected_views",
+        lambda *args: projected.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "markdown",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("Assembly legend must not render in the main UI")
+        ),
+    )
+
+    drawing_studio_page._render_assembly_drawings(arrangement, "en")
+
+    assert len(projected) == 1
+    assert projected[0][2] == {"frame": 1}
 
 
 def test_drawing_package_keeps_component_and_connection_identity_across_sections():

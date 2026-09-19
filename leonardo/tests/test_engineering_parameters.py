@@ -673,6 +673,46 @@ def test_project_specific_display_omits_empty_rows(monkeypatch):
     assert "**Missing**" not in rendered_markdown
 
 
+def test_project_specific_displays_concept_components_without_storing_them(
+    monkeypatch,
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Component display")
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["project_specific"] = [
+        _project_parameter("payload", "25", "suggested")
+    ]
+    database.save_engineering_parameter_set(concept_id, parameter_set)
+    stored_before = copy.deepcopy(database.get_engineering_parameter_set(concept_id))
+    rendered_headings = []
+    rendered_components = []
+    concept_data = {
+        "system_components": ["Main Frame", {"name": "Drive Unit"}],
+    }
+
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "markdown",
+        lambda value, **kwargs: rendered_headings.append(value),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "write",
+        lambda marker, value: rendered_components.append((marker, value)),
+    )
+
+    drawing_studio_page._render_system_components(concept_data, "en")
+
+    assert rendered_headings == ["**System Components**"]
+    assert rendered_components == [("•", "Main Frame"), ("•", "Drive Unit")]
+    assert database.get_engineering_parameter_set(concept_id) == stored_before
+    assert all(
+        parameter["key"] != "system_components"
+        for parameter in stored_before["project_specific"]
+    )
+
+
 def test_block_saves_are_independent_and_update_internal_statuses(
     monkeypatch,
     temporary_database,
