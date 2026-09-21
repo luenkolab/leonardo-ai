@@ -343,6 +343,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    .st-key-drawing_package_export,
+    [class*="st-key-engineering_parameters_ai_engineer_"],
     [class*="st-key-engineering_parameters_edit_"],
     [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
@@ -368,6 +370,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    .st-key-drawing_package_export,
+    [class*="st-key-engineering_parameters_ai_engineer_"],
     [class*="st-key-engineering_parameters_edit_"],
     [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
@@ -478,6 +482,8 @@ div[data-testid="stButton"] > button[kind="primary"] {
     .st-key-download_pdf_main,
     .st-key-open_drawing_studio,
     .st-key-drawing_studio_back,
+    .st-key-drawing_package_export,
+    [class*="st-key-engineering_parameters_ai_engineer_"],
     [class*="st-key-engineering_parameters_edit_"],
     [class*="st-key-engineering_parameters_save_"],
     .st-key-publish_current_concept_to_marketplace,
@@ -574,6 +580,31 @@ div[data-testid="stButton"] > button[kind="primary"] {
 
 .result-box.result-box--control-gap {
     margin-bottom: 30px !important;
+}
+
+[class*="st-key-engineering_parameter_"] [data-testid="stTextInputRootElement"] {
+    color: #f3e7c4 !important;
+    background: #122033 !important;
+    border: 1px solid rgba(217,168,79,0.34) !important;
+    border-radius: 10px !important;
+    box-shadow: var(--control-depth) !important;
+}
+
+[class*="st-key-engineering_parameter_"] [data-baseweb="base-input"],
+[class*="st-key-engineering_parameter_"] [data-testid="stTextInputRootElement"] input {
+    color: #f3e7c4 !important;
+    background: transparent !important;
+}
+
+[class*="st-key-engineering_parameter_"] [data-testid="stTextInputRootElement"] input:disabled {
+    color: #f3e7c4 !important;
+    -webkit-text-fill-color: #f3e7c4 !important;
+    opacity: 1 !important;
+}
+
+[class*="st-key-engineering_parameter_"] [data-testid="stTextInputRootElement"]:focus-within {
+    border-color: rgba(217,168,79,0.34) !important;
+    box-shadow: var(--control-depth) !important;
 }
 
 .st-key-voice_pause,
@@ -702,6 +733,17 @@ div[data-testid="stExpander"] {
     border: 1px solid rgba(217,168,79,0.34) !important;
     border-radius: 11px !important;
     background: linear-gradient(180deg, rgba(11,27,42,0.98) 0%, rgba(7,17,28,0.98) 100%) !important;
+}
+
+[class*="st-key-drawing_package_"] [data-testid="stExpander"],
+[class*="st-key-drawing_package_"] [data-testid="stExpander"] summary {
+    background: var(--control-background) !important;
+}
+
+[class*="st-key-drawing_package_"] [data-testid="stExpander"] summary:hover,
+[class*="st-key-drawing_package_"] [data-testid="stExpander"] details[open] > summary,
+[class*="st-key-drawing_package_"] [data-testid="stExpanderDetails"] {
+    background: var(--control-hover-background) !important;
 }
 
 :is(

@@ -38,7 +38,6 @@ def load_engineering_parameters_for_viewer(concept_id, viewer_language):
     if (
         source_language is None
         or target_language == source_language
-        or not original["project_specific"]
     ):
         return original
 

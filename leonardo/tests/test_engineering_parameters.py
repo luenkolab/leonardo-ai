@@ -565,6 +565,7 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
 
 def test_edit_enables_only_core_parameter_fields(monkeypatch):
     field_states = []
+    column_specs = []
 
     class Column:
         def markdown(self, *args, **kwargs):
@@ -575,7 +576,6 @@ def test_edit_enables_only_core_parameter_fields(monkeypatch):
             return value
 
     parameter_set = service.build_empty_parameter_set()
-    parameter_set["universal"] = parameter_set["universal"][:1]
     parameter_set["universal"].append(
         {
             "key": "unit_system",
@@ -594,7 +594,9 @@ def test_edit_enables_only_core_parameter_fields(monkeypatch):
     monkeypatch.setattr(
         drawing_studio_page.st,
         "columns",
-        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+        lambda spec, **kwargs: (
+            column_specs.append(spec) or [Column(), Column(), Column(), Column()]
+        ),
     )
     monkeypatch.setattr(
         drawing_studio_page.st,
@@ -609,17 +611,12 @@ def test_edit_enables_only_core_parameter_fields(monkeypatch):
         "en",
         False,
     )
-    drawing_studio_page._render_parameter_rows(
-        5,
-        parameter_set,
-        "project_specific",
-        "en",
-        False,
-    )
-    assert field_states == [True, True]
-    assert captions == ["AI Suggestion: Needed for project preparation"]
+    assert field_states == [True] * 22
+    assert column_specs == [(2.3, 1.5, 2.3, 1.2)] * 12
+    assert captions == []
 
     field_states.clear()
+    column_specs.clear()
     drawing_studio_page._render_parameter_rows(
         5,
         parameter_set,
@@ -627,6 +624,11 @@ def test_edit_enables_only_core_parameter_fields(monkeypatch):
         "en",
         True,
     )
+    assert field_states == [False] * 22
+    assert column_specs == [(2.3, 1.5, 2.3, 1.2)] * 12
+
+    field_states.clear()
+    column_specs.clear()
     drawing_studio_page._render_parameter_rows(
         5,
         parameter_set,
@@ -634,30 +636,41 @@ def test_edit_enables_only_core_parameter_fields(monkeypatch):
         "en",
         True,
     )
-    assert field_states == [False, False]
+    assert field_states == [True, True]
+    assert len(column_specs) == 2
+    assert column_specs == [(2.3, 1.5, 2.3, 1.2)] * 2
 
 
 def test_project_specific_display_omits_empty_rows(monkeypatch):
     rendered_markdown = []
+    rendered_inputs = []
+    captions = []
+    column_specs = []
 
     class Column:
         def markdown(self, value, **kwargs):
             rendered_markdown.append(value)
 
-        def text_input(self, *_args, **_kwargs):
-            raise AssertionError("Project-specific values must be read-only text")
+        def text_input(self, _label, value, **kwargs):
+            rendered_inputs.append((value, kwargs))
+            return value
 
     parameter_set = service.build_empty_parameter_set()
     parameter_set["project_specific"] = [
         _project_parameter("missing", None),
         _project_parameter("known", "25 kg", "suggested"),
     ]
+
+    def columns(spec, **kwargs):
+        column_specs.append(spec)
+        return [Column(), Column(), Column(), Column()]
+
+    monkeypatch.setattr(drawing_studio_page.st, "columns", columns)
     monkeypatch.setattr(
         drawing_studio_page.st,
-        "columns",
-        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+        "caption",
+        lambda *args: captions.append(args),
     )
-    monkeypatch.setattr(drawing_studio_page.st, "caption", lambda *args: None)
     monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
 
     drawing_studio_page._render_parameter_rows(
@@ -668,9 +681,156 @@ def test_project_specific_display_omits_empty_rows(monkeypatch):
         False,
     )
 
-    assert "25 kg" in rendered_markdown
+    assert [value for value, _kwargs in rendered_inputs] == ["25 kg", ""]
+    assert all(kwargs["disabled"] for _value, kwargs in rendered_inputs)
     assert "**Known**" in rendered_markdown
     assert "**Missing**" not in rendered_markdown
+    assert captions == []
+    assert column_specs == [
+        (2.3, 1.5, 2.3, 1.2),
+        (2.3, 1.5, 2.3, 1.2),
+    ]
+    assert parameter_set["project_specific"][1]["rationale"] == (
+        "Needed for project preparation"
+    )
+
+
+def test_parameter_value_and_unit_widget_keys_include_viewer_language(monkeypatch):
+    widget_keys = []
+
+    class Column:
+        def markdown(self, *_args, **_kwargs):
+            return None
+
+        def text_input(self, _label, value, **kwargs):
+            widget_keys.append(kwargs["key"])
+            return value
+
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["universal"] = [
+        _universal(parameter_set, "overall_dimensions_envelope")
+    ]
+    parameter_set["project_specific"] = [
+        _project_parameter("payload", "25", "suggested")
+    ]
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "columns",
+        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
+
+    for language in ("en", "ru"):
+        for group_name in ("universal", "project_specific"):
+            drawing_studio_page._render_parameter_rows(
+                7,
+                parameter_set,
+                group_name,
+                language,
+                False,
+            )
+
+    assert widget_keys == [
+        "engineering_parameter_value_7_overall_dimensions_envelope_en_view",
+        "engineering_parameter_unit_7_overall_dimensions_envelope_en",
+        "engineering_parameter_project_specific_value_7_payload_en",
+        "engineering_parameter_project_specific_unit_7_payload_en",
+        "engineering_parameter_value_7_overall_dimensions_envelope_ru_view",
+        "engineering_parameter_unit_7_overall_dimensions_envelope_ru",
+        "engineering_parameter_project_specific_value_7_payload_ru",
+        "engineering_parameter_project_specific_unit_7_payload_ru",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("language", "expected"),
+    (
+        ("en", "Length=20; Width=3; Height=2"),
+        ("ru", "Длина=20; Ширина=3; Высота=2"),
+        ("sv", "Längd=20; Bredd=3; Höjd=2"),
+    ),
+)
+def test_overall_envelope_display_labels_are_localized(language, expected):
+    canonical = "length=20; width=3; height=2"
+
+    assert (
+        drawing_studio_page._format_overall_envelope_for_viewer(canonical, language)
+        == expected
+    )
+    assert canonical == "length=20; width=3; height=2"
+
+
+def test_envelope_edit_and_save_keep_canonical_syntax(
+    monkeypatch,
+    temporary_database,
+    valid_concept,
+):
+    concept_id = _save_test_concept(valid_concept, "Localized envelope")
+    parameter_set = service.build_empty_parameter_set()
+    envelope = _universal(parameter_set, "overall_dimensions_envelope")
+    envelope.update(
+        {
+            "value": "length=20; width=3; height=2",
+            "unit": "m",
+            "status": "confirmed",
+            "source": "user",
+        }
+    )
+    parameter_set["universal"] = [envelope]
+    database.save_engineering_parameter_set(concept_id, parameter_set, "en")
+    rendered_inputs = []
+
+    class Column:
+        def markdown(self, *_args, **_kwargs):
+            return None
+
+        def text_input(self, _label, value, **kwargs):
+            rendered_inputs.append((value, kwargs["key"]))
+            return value
+
+    monkeypatch.setattr(
+        drawing_studio_page.st,
+        "columns",
+        lambda *args, **kwargs: [Column(), Column(), Column(), Column()],
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
+
+    drawing_studio_page._render_parameter_rows(
+        concept_id,
+        parameter_set,
+        "universal",
+        "ru",
+        False,
+    )
+    rendered_values = drawing_studio_page._render_parameter_rows(
+        concept_id,
+        parameter_set,
+        "universal",
+        "ru",
+        True,
+    )
+    parameter_application.save_engineering_parameter_values(
+        concept_id,
+        parameter_set,
+        "universal",
+        rendered_values,
+    )
+
+    stored = database.get_engineering_parameter_set(concept_id)
+    stored_envelope = _universal(stored, "overall_dimensions_envelope")
+    arrangement = build_general_arrangement(valid_concept, stored)
+    assert rendered_inputs[0] == (
+        "Длина=20; Ширина=3; Высота=2",
+        f"engineering_parameter_value_{concept_id}_overall_dimensions_envelope_ru_view",
+    )
+    assert rendered_inputs[2] == (
+        "length=20; width=3; height=2",
+        f"engineering_parameter_value_{concept_id}_overall_dimensions_envelope_ru_edit",
+    )
+    assert stored_envelope["value"] == "length=20; width=3; height=2"
+    assert arrangement.overall_envelope.length.value == 20000
+    assert arrangement.overall_envelope.width.value == 3000
+    assert arrangement.overall_envelope.height.value == 2000
 
 
 def test_project_specific_displays_concept_components_without_storing_them(
@@ -886,12 +1046,21 @@ def test_viewer_translation_is_cached_and_preserves_canonical_parameters(
     canonical = service.build_empty_parameter_set()
     parameter = _project_parameter(
         "assembly_time",
-        "1-3 hours",
+        "Quick modular assembly",
         "suggested",
         label="Assembly Time",
     )
     parameter["unit"] = "hours"
     canonical["project_specific"] = [parameter]
+    core_parameter = _universal(canonical, "primary_materials")
+    core_parameter.update(
+        {
+            "value": "Lightweight composite materials, Recycled aluminium",
+            "status": "suggested",
+            "source": "ai",
+            "rationale": "Selected for low mass.",
+        }
+    )
     database.save_engineering_parameter_set(concept_id, canonical, "en")
     calls = []
 
@@ -901,9 +1070,13 @@ def test_viewer_translation_is_cached_and_preserves_canonical_parameters(
         translated["project_specific"][0].update(
             {
                 "label": "Время сборки",
+                "value": "Быстрая модульная сборка",
                 "rationale": "Предполагается модульная конструкция.",
                 "unit": "часы",
             }
+        )
+        _universal(translated, "primary_materials")["value"] = (
+            "Лёгкие композитные материалы, переработанный алюминий"
         )
         return translated
 
@@ -935,52 +1108,134 @@ def test_viewer_translation_is_cached_and_preserves_canonical_parameters(
     assert english_again == english == canonical
     assert russian_again == russian
     assert russian["project_specific"][0]["label"] == "Время сборки"
+    assert russian["project_specific"][0]["value"] == "Быстрая модульная сборка"
     assert russian["project_specific"][0]["rationale"].startswith("Предполагается")
     assert russian["project_specific"][0]["unit"] == "часы"
-    assert russian["project_specific"][0]["value"] == "1-3 hours"
+    assert _universal(russian, "primary_materials")["value"].startswith("Лёгкие")
     assert database.get_engineering_parameter_set(concept_id) == canonical
 
 
 def test_structured_translation_changes_only_display_fields(monkeypatch):
     parameter_set = service.build_empty_parameter_set()
-    hours = _project_parameter("assembly_time", "1-3 hours", "suggested")
+    core_text = _universal(parameter_set, "operating_environment")
+    core_text.update(
+        {
+            "value": "Outdoor, variable weather conditions",
+            "source": "concept",
+            "status": "suggested",
+            "rationale": "Defines the operating context.",
+        }
+    )
+    user_text = _universal(parameter_set, "primary_materials")
+    user_text.update(
+        {
+            "value": "Lightweight composite materials, Recycled aluminium",
+            "source": "user",
+            "status": "confirmed",
+        }
+    )
+    ai_text = _universal(parameter_set, "interfaces_connections")
+    ai_text.update(
+        {
+            "value": "Modular connections for quick assembly",
+            "source": "ai",
+            "status": "suggested",
+            "rationale": "Defines assembly interfaces.",
+        }
+    )
+    manufacturing = _universal(parameter_set, "manufacturing_constraints")
+    manufacturing.update(
+        {
+            "value": "Limited production capacity for initial prototypes",
+            "source": "concept",
+            "status": "suggested",
+        }
+    )
+    maintenance = _universal(parameter_set, "service_maintenance_conditions")
+    maintenance.update(
+        {
+            "value": "Regular inspections required post-deployment",
+            "source": "ai",
+            "status": "suggested",
+        }
+    )
+    envelope = _universal(parameter_set, "overall_dimensions_envelope")
+    envelope.update(
+        {
+            "value": "length=20; width=3; height=2",
+            "unit": "m",
+            "source": "ai",
+            "status": "suggested",
+            "rationale": "Known envelope.",
+        }
+    )
+    hours = _project_parameter("assembly_time", "1-3", "suggested")
     hours["unit"] = "hours"
-    percent = _project_parameter("efficiency", "15-20", "suggested")
-    percent["unit"] = "%"
-    parameter_set["project_specific"] = [hours, percent]
-    response_payload = {
-        "project_specific": [
-            {
-                "key": "assembly_time",
-                "label": "Время сборки",
-                "rationale": "Необходимо для подготовки проекта",
-                "unit": "часы",
-            },
-            {
-                "key": "efficiency",
-                "label": "Эффективность",
-                "rationale": "Необходимо для подготовки проекта",
-                "unit": "%",
-            },
-        ]
-    }
+    meters = _project_parameter(
+        "maximum_river_width",
+        "Modular connections for quick assembly",
+        "suggested",
+        label="Maximum River Width",
+    )
+    meters["unit"] = "meters"
+    technical_units = []
+    for key, value, unit in (
+        ("mass", "5000", "kg"),
+        ("clearance", "1.5", "mm"),
+        ("span", "10-20", "m"),
+        ("efficiency", "15-20", "%"),
+        ("energy", "100", "Wh"),
+    ):
+        parameter = _project_parameter(key, value, "suggested")
+        parameter["unit"] = unit
+        technical_units.append(parameter)
+    parameter_set["project_specific"] = [hours, meters, *technical_units]
     calls = []
+
+    def create(**kwargs):
+        calls.append(kwargs)
+        response_payload = json.loads(kwargs["messages"][-1]["content"])
+        translated = copy.deepcopy(response_payload)
+        _universal(translated, "operating_environment")["value"] = (
+            "На открытом воздухе, переменные погодные условия"
+        )
+        _universal(translated, "primary_materials")["value"] = (
+            "Лёгкие композитные материалы, переработанный алюминий"
+        )
+        _universal(translated, "interfaces_connections")["value"] = (
+            "Модульные соединения для быстрой сборки"
+        )
+        _universal(translated, "manufacturing_constraints")["value"] = (
+            "Ограниченные производственные мощности для первых прототипов"
+        )
+        _universal(translated, "service_maintenance_conditions")["value"] = (
+            "После ввода в эксплуатацию требуются регулярные проверки"
+        )
+        for parameter in translated["project_specific"]:
+            if parameter["label"] is not None:
+                parameter["label"] = f"RU: {parameter['label']}"
+            if parameter["value"] is not None:
+                parameter["value"] = "Модульные соединения для быстрой сборки"
+            if parameter["unit_text"] == "hours":
+                parameter["unit_text"] = "часы"
+            elif parameter["unit_text"] == "meters":
+                parameter["unit_text"] = "метры"
+            if parameter["rationale"] is not None:
+                parameter["rationale"] = "Переведённое обоснование"
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content=json.dumps(translated, ensure_ascii=False)
+                    )
+                )
+            ]
+        )
+
     client = SimpleNamespace(
         chat=SimpleNamespace(
             completions=SimpleNamespace(
-                create=lambda **kwargs: calls.append(kwargs)
-                or SimpleNamespace(
-                    choices=[
-                        SimpleNamespace(
-                            message=SimpleNamespace(
-                                content=json.dumps(
-                                    response_payload,
-                                    ensure_ascii=False,
-                                )
-                            )
-                        )
-                    ]
-                )
+                create=create,
             )
         )
     )
@@ -993,7 +1248,64 @@ def test_structured_translation_changes_only_display_fields(monkeypatch):
     )
 
     assert len(calls) == 1
+    request_payload = json.loads(calls[0]["messages"][-1]["content"])
+    requested_project_units = {
+        parameter["key"]: parameter["unit_text"]
+        for parameter in request_payload["project_specific"]
+    }
+    assert requested_project_units == {
+        "assembly_time": "hours",
+        "maximum_river_width": "meters",
+        "mass": None,
+        "clearance": None,
+        "span": None,
+        "efficiency": None,
+        "energy": None,
+    }
+    assert _universal(request_payload, "overall_dimensions_envelope")["value"] == (
+        "length=20; width=3; height=2"
+    )
+    assert (
+        _universal(request_payload, "overall_dimensions_envelope")["unit_text"]
+        is None
+    )
+    assert _universal(translated, "operating_environment")["value"].startswith(
+        "На открытом"
+    )
+    assert _universal(translated, "primary_materials")["value"].startswith(
+        "Лёгкие"
+    )
+    assert _universal(translated, "interfaces_connections")["value"].startswith(
+        "Модульные"
+    )
+    assert _universal(translated, "manufacturing_constraints")["value"].startswith(
+        "Ограниченные"
+    )
+    assert _universal(
+        translated,
+        "service_maintenance_conditions",
+    )["value"].startswith("После ввода")
+    assert translated["project_specific"][0]["label"].startswith("RU:")
     assert translated["project_specific"][0]["unit"] == "часы"
-    assert translated["project_specific"][1]["unit"] == "%"
-    assert translated["project_specific"][0]["value"] == "1-3 hours"
+    assert translated["project_specific"][0]["value"] == "1-3"
+    assert translated["project_specific"][1]["value"].startswith("Модульные")
+    assert translated["project_specific"][1]["unit"] == "метры"
+    assert [parameter["unit"] for parameter in translated["project_specific"][2:]] == [
+        "kg",
+        "mm",
+        "m",
+        "%",
+        "Wh",
+    ]
+    assert [parameter["value"] for parameter in translated["project_specific"][2:]] == [
+        "5000",
+        "1.5",
+        "10-20",
+        "15-20",
+        "100",
+    ]
+    assert _universal(translated, "overall_dimensions_envelope")["value"] == (
+        "length=20; width=3; height=2"
+    )
+    assert _universal(translated, "overall_dimensions_envelope")["unit"] == "m"
     assert translated["project_specific"][0]["status"] == "suggested"

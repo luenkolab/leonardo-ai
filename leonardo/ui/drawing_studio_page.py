@@ -1,5 +1,6 @@
 from datetime import datetime
 import html
+import re
 
 import streamlit as st
 
@@ -60,6 +61,18 @@ def _parameter_label(parameter, language):
     return parameter["label"]
 
 
+def _format_overall_envelope_for_viewer(value, language):
+    labels = {
+        axis: translate(f"drawing_studio.envelope.{axis}", language)
+        for axis in ("length", "width", "height")
+    }
+    return re.sub(
+        r"\b(length|width|height)(?=\s*=)",
+        lambda match: labels[match.group(1)],
+        value,
+    )
+
+
 def _render_parameter_rows(
     concept_id,
     parameter_set,
@@ -92,34 +105,41 @@ def _render_parameter_rows(
             vertical_alignment="center",
         )
         row[0].markdown(f"**{_parameter_label(parameter, language)}**")
-        if group_name == "project_specific":
-            row[2].markdown(html.escape(parameter["value"]))
-            if parameter["unit"]:
-                row[3].markdown(html.escape(parameter["unit"]))
-            if parameter["rationale"]:
-                st.caption(
-                    f"{translate('engineering_parameters.ai_suggestion', language)}: "
-                    f"{parameter['rationale']}"
-                )
-        else:
-            value = row[2].text_input(
-                translate("engineering_parameters.value", language),
-                value=parameter["value"] or "",
-                key=f"engineering_parameter_value_{concept_id}_{parameter['key']}",
-                label_visibility="collapsed",
-                disabled=not edit_mode,
-                width=360,
-            ).strip() or None
-            unit = row[3].text_input(
-                translate("engineering_parameters.unit", language),
-                value=parameter["unit"] or "",
-                key=(
-                    f"engineering_parameter_unit_{concept_id}_"
-                    f"{parameter['key']}_{language}"
-                ),
-                label_visibility="collapsed",
-                disabled=not edit_mode,
-            ).strip() or None
+        disabled = group_name == "project_specific" or not edit_mode
+        key_group = "" if group_name == "universal" else f"{group_name}_"
+        is_envelope = (
+            group_name == "universal"
+            and parameter["key"] == "overall_dimensions_envelope"
+        )
+        displayed_value = parameter["value"] or ""
+        if is_envelope and not edit_mode:
+            displayed_value = _format_overall_envelope_for_viewer(
+                displayed_value,
+                language,
+            )
+        value_mode = f"_{'edit' if edit_mode else 'view'}" if is_envelope else ""
+        value = row[2].text_input(
+            translate("engineering_parameters.value", language),
+            value=displayed_value,
+            key=(
+                f"engineering_parameter_{key_group}value_{concept_id}_"
+                f"{parameter['key']}_{language}{value_mode}"
+            ),
+            label_visibility="collapsed",
+            disabled=disabled,
+            width=360,
+        ).strip() or None
+        unit = row[3].text_input(
+            translate("engineering_parameters.unit", language),
+            value=parameter["unit"] or "",
+            key=(
+                f"engineering_parameter_{key_group}unit_{concept_id}_"
+                f"{parameter['key']}_{language}"
+            ),
+            label_visibility="collapsed",
+            disabled=disabled,
+        ).strip() or None
+        if group_name == "universal":
             rendered_values[parameter["key"]] = (value, unit)
         st.space("small" if parameter is parameters[-1] else "xxsmall")
 
@@ -483,7 +503,7 @@ def _general_arrangement_view_markup(
             )
     components_markup = "\n    ".join(component_rectangles)
 
-    return f"""
+    return "".join(f"""
 <div style="border:1px solid rgba(73, 112, 140, 0.32); border-radius:10px; padding:10px; margin-top:10px; background:rgba(229, 242, 250, 0.18);">
   <div style="font-weight:650; margin:2px 4px 4px;">{safe_title}</div>
   <svg viewBox="0 0 320 220" role="img" aria-label="{safe_title}" style="display:block; width:100%; height:auto;">
@@ -504,7 +524,7 @@ def _general_arrangement_view_markup(
     <text x="{vertical_x - 9:.2f}" y="{rectangle_y + rectangle_height / 2:.2f}" text-anchor="middle" font-size="11" fill="#254b61" transform="rotate(-90 {vertical_x - 9:.2f} {rectangle_y + rectangle_height / 2:.2f})">{vertical_label}</text>
   </svg>
 </div>
-"""
+""".splitlines())
 
 
 def _render_general_arrangement_views(general_arrangement, language):
@@ -1125,6 +1145,7 @@ def _render_drawing_package_export(
         ),
         mime="application/pdf",
         key="drawing_package_export",
+        width="content",
     )
 
 
@@ -1233,6 +1254,7 @@ def render_drawing_studio():
         parameter_set["connections"],
         language,
     )
+    st.space("small")
     with st.container(
         horizontal=True,
         horizontal_alignment="right",

@@ -1519,7 +1519,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_KEYS = (
 _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     "es": (
         "Datos de ingeniería",
-        "Parámetros básicos de ingeniería", "Parámetros específicos del proyecto", "✨ AI Engineer", "Generar parámetros del proyecto con IA",
+        "Parámetros básicos de ingeniería", "Parámetros específicos del proyecto", "✨ Ingeniero de IA", "Generar parámetros del proyecto con IA",
         "Parámetro", "Valor", "Unidad", "Estado", "Acciones", "Aceptar", "Editar", "Guardar", "Confirmar", "No aplicable",
         "Faltante", "Sugerido", "Confirmado", "No aplicable", "Sugerencia de IA",
         "Las sugerencias de IA son datos preliminares de ingeniería y requieren revisión del usuario antes de su uso.",
@@ -1530,7 +1530,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "pt": (
         "Dados de engenharia",
-        "Parâmetros fundamentais de engenharia", "Parâmetros específicos do projeto", "✨ AI Engineer", "Gerar parâmetros do projeto com IA",
+        "Parâmetros fundamentais de engenharia", "Parâmetros específicos do projeto", "✨ Engenheiro de IA", "Gerar parâmetros do projeto com IA",
         "Parâmetro", "Valor", "Unidade", "Estado", "Ações", "Aceitar", "Editar", "Guardar", "Confirmar", "Não aplicável",
         "Em falta", "Sugerido", "Confirmado", "Não aplicável", "Sugestão de IA",
         "As sugestões de IA são dados preliminares de engenharia e exigem revisão do utilizador antes do uso.",
@@ -1541,7 +1541,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "fr": (
         "Données d’ingénierie",
-        "Paramètres d’ingénierie essentiels", "Paramètres spécifiques au projet", "✨ AI Engineer", "Générer les paramètres du projet avec l’IA",
+        "Paramètres d’ingénierie essentiels", "Paramètres spécifiques au projet", "✨ Ingénieur IA", "Générer les paramètres du projet avec l’IA",
         "Paramètre", "Valeur", "Unité", "État", "Actions", "Accepter", "Modifier", "Enregistrer", "Confirmer", "Non applicable",
         "Manquant", "Suggéré", "Confirmé", "Non applicable", "Suggestion IA",
         "Les suggestions de l’IA sont des données d’ingénierie préliminaires qui doivent être examinées par l’utilisateur avant utilisation.",
@@ -1552,7 +1552,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "de": (
         "Technische Eingaben",
-        "Technische Kernparameter", "Projektspezifische Parameter", "✨ AI Engineer", "Projektparameter mit KI generieren",
+        "Technische Kernparameter", "Projektspezifische Parameter", "✨ KI-Ingenieur", "Projektparameter mit KI generieren",
         "Parameter", "Wert", "Einheit", "Status", "Aktionen", "Übernehmen", "Bearbeiten", "Speichern", "Bestätigen", "Nicht zutreffend",
         "Fehlend", "Vorgeschlagen", "Bestätigt", "Nicht zutreffend", "KI-Vorschlag",
         "KI-Vorschläge sind vorläufige technische Eingaben und müssen vor der Nutzung vom Benutzer geprüft werden.",
@@ -1563,7 +1563,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "it": (
         "Dati ingegneristici",
-        "Parametri ingegneristici fondamentali", "Parametri specifici del progetto", "✨ AI Engineer", "Genera i parametri del progetto con l’IA",
+        "Parametri ingegneristici fondamentali", "Parametri specifici del progetto", "✨ Ingegnere IA", "Genera i parametri del progetto con l’IA",
         "Parametro", "Valore", "Unità", "Stato", "Azioni", "Accetta", "Modifica", "Salva", "Conferma", "Non applicabile",
         "Mancante", "Suggerito", "Confermato", "Non applicabile", "Suggerimento IA",
         "I suggerimenti dell’IA sono dati ingegneristici preliminari e richiedono la revisione dell’utente prima dell’uso.",
@@ -1574,7 +1574,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "ru": (
         "Инженерные исходные данные",
-        "Основные инженерные параметры", "Специальные параметры проекта", "✨ AI Engineer", "Сгенерировать параметры проекта с ИИ",
+        "Основные инженерные параметры", "Специальные параметры проекта", "✨ ИИ-инженер", "Сгенерировать параметры проекта с ИИ",
         "Параметр", "Значение", "Единица", "Статус", "Действия", "Принять", "Изменить", "Сохранить", "Подтвердить", "Не применимо",
         "Не заполнено", "Предложено", "Подтверждено", "Не применимо", "Предложение ИИ",
         "Предложения ИИ — предварительные инженерные данные, требующие проверки пользователем перед использованием.",
@@ -1585,7 +1585,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "sv": (
         "Tekniska indata",
-        "Grundläggande tekniska parametrar", "Projektspecifika parametrar", "✨ AI Engineer", "Generera projektparametrar med AI",
+        "Grundläggande tekniska parametrar", "Projektspecifika parametrar", "✨ AI-ingenjör", "Generera projektparametrar med AI",
         "Parameter", "Värde", "Enhet", "Status", "Åtgärder", "Acceptera", "Redigera", "Spara", "Bekräfta", "Ej tillämpligt",
         "Saknas", "Föreslagen", "Bekräftad", "Ej tillämpligt", "AI-förslag",
         "AI-förslag är preliminära tekniska indata och kräver användargranskning före användning.",
@@ -1596,7 +1596,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "fi": (
         "Tekniset lähtötiedot",
-        "Keskeiset tekniset parametrit", "Projektikohtaiset parametrit", "✨ AI Engineer", "Generoi projektiparametrit tekoälyllä",
+        "Keskeiset tekniset parametrit", "Projektikohtaiset parametrit", "✨ Tekoälyinsinööri", "Generoi projektiparametrit tekoälyllä",
         "Parametri", "Arvo", "Yksikkö", "Tila", "Toiminnot", "Hyväksy", "Muokkaa", "Tallenna", "Vahvista", "Ei sovelleta",
         "Puuttuu", "Ehdotettu", "Vahvistettu", "Ei sovelleta", "Tekoälyehdotus",
         "Tekoälyehdotukset ovat alustavia teknisiä lähtötietoja ja vaativat käyttäjän tarkistuksen ennen käyttöä.",
@@ -1607,7 +1607,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "pl": (
         "Dane inżynierskie",
-        "Podstawowe parametry inżynieryjne", "Parametry specyficzne dla projektu", "✨ AI Engineer", "Generuj parametry projektu za pomocą AI",
+        "Podstawowe parametry inżynieryjne", "Parametry specyficzne dla projektu", "✨ Inżynier AI", "Generuj parametry projektu za pomocą AI",
         "Parametr", "Wartość", "Jednostka", "Status", "Działania", "Akceptuj", "Edytuj", "Zapisz", "Potwierdź", "Nie dotyczy",
         "Brak", "Sugerowane", "Potwierdzone", "Nie dotyczy", "Sugestia AI",
         "Sugestie AI są wstępnymi danymi inżynierskimi i wymagają przeglądu użytkownika przed użyciem.",
@@ -1618,7 +1618,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "zh": (
         "工程输入",
-        "核心工程参数", "项目专用参数", "✨ AI Engineer", "使用 AI 生成项目参数",
+        "核心工程参数", "项目专用参数", "✨ AI 工程师", "使用 AI 生成项目参数",
         "参数", "值", "单位", "状态", "操作", "接受", "编辑", "保存", "确认", "不适用",
         "缺失", "建议值", "已确认", "不适用", "AI 建议",
         "AI 建议属于初步工程输入，使用前需要用户审查。",
@@ -1629,7 +1629,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "ja": (
         "工学入力",
-        "中核工学パラメーター", "プロジェクト固有パラメーター", "✨ AI Engineer", "AI でプロジェクトパラメーターを生成",
+        "中核工学パラメーター", "プロジェクト固有パラメーター", "✨ AIエンジニア", "AI でプロジェクトパラメーターを生成",
         "パラメーター", "値", "単位", "状態", "操作", "採用", "編集", "保存", "確認", "適用外",
         "未入力", "提案済み", "確認済み", "適用外", "AI 提案",
         "AI 提案は予備的な工学入力であり、使用前にユーザーによる確認が必要です。",
@@ -1640,7 +1640,7 @@ _ENGINEERING_PARAMETER_TRANSLATION_VALUES = {
     ),
     "ko": (
         "엔지니어링 입력",
-        "핵심 엔지니어링 매개변수", "프로젝트별 매개변수", "✨ AI Engineer", "AI로 프로젝트 매개변수 생성",
+        "핵심 엔지니어링 매개변수", "프로젝트별 매개변수", "✨ AI 엔지니어", "AI로 프로젝트 매개변수 생성",
         "매개변수", "값", "단위", "상태", "작업", "수락", "편집", "저장", "확인", "해당 없음",
         "누락", "제안됨", "확인됨", "해당 없음", "AI 제안",
         "AI 제안은 예비 엔지니어링 입력이며 사용 전에 사용자의 검토가 필요합니다.",

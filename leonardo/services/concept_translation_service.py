@@ -44,29 +44,30 @@ def _validate_matching_structure(original, translated, path="concept"):
         raise ValueError(f"Translation changed non-text value at {path}")
 
 
-def translate_concept_data(
-    original_concept,
+def _translate_structured_text(
+    original,
     source_language,
     target_language,
+    subject,
+    extra_rules=(),
 ):
-    """Translate ConceptData values while preserving its exact JSON structure."""
-    original = validate_concept_data(original_concept)
-    source_name = ai_language_name(source_language)
-    target_name = ai_language_name(target_language)
-
+    """Translate natural-language values in structured JSON data."""
+    rules = "\n".join(f"- {rule}" for rule in extra_rules)
     system_prompt = f"""
 You are a precise technical translator.
-Translate the supplied invention concept from {source_name} to {target_name}.
+Translate the supplied {subject} from {ai_language_name(source_language)} to
+{ai_language_name(target_language)}.
 
 Return only one valid JSON object.
 Rules:
 - Keep every JSON key exactly unchanged.
 - Keep all arrays, nesting, array lengths, and value types exactly unchanged.
 - Translate only natural-language string values and strings inside lists.
-- Do not recalculate numbers or convert currencies or measurement units.
+- Do not recalculate numeric values or convert currencies or measurement quantities between unit systems.
 - Preserve identifiers, technical codes, and proper product or brand names.
 - Do not add, remove, correct, summarize, reinterpret, or improve information.
 - Preserve empty strings as empty strings.
+{rules}
 """
     response = get_text_client().chat.completions.create(
         model=TRANSLATION_MODEL,
@@ -74,19 +75,31 @@ Rules:
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": json.dumps(original, ensure_ascii=False),
-            },
+            {"role": "user", "content": json.dumps(original, ensure_ascii=False)},
         ],
     )
-
     content = response.choices[0].message.content
     if not content:
         raise RuntimeError("Empty response from OpenAI")
 
     translated = json.loads(content)
-    _validate_matching_structure(original, translated)
+    _validate_matching_structure(original, translated, subject)
+    return translated
+
+
+def translate_concept_data(
+    original_concept,
+    source_language,
+    target_language,
+):
+    """Translate ConceptData values while preserving its exact JSON structure."""
+    original = validate_concept_data(original_concept)
+    translated = _translate_structured_text(
+        original,
+        source_language,
+        target_language,
+        "invention concept",
+    )
     return validate_concept_data(translated)
 
 
@@ -95,71 +108,63 @@ def translate_engineering_parameter_set(
     source_language,
     target_language,
 ):
-    """Translate only project-specific engineering display fields."""
+    """Translate engineering display text through structured translation."""
     original = validate_parameter_set(original_parameter_set)
     payload = {
-        "project_specific": [
+        group_name: [
             {
                 "key": parameter["key"],
-                "label": parameter["label"],
+                "label": (
+                    parameter["label"]
+                    if group_name == "project_specific"
+                    else None
+                ),
+                "value": parameter["value"],
+                "unit_text": (
+                    parameter["unit"]
+                    if parameter["unit"]
+                    and parameter["unit"].isalpha()
+                    and parameter["unit"].islower()
+                    and len(parameter["unit"]) > 3
+                    else None
+                ),
                 "rationale": parameter["rationale"],
-                "unit": parameter["unit"],
             }
-            for parameter in original["project_specific"]
+            for parameter in original[group_name]
         ]
+        for group_name in ("universal", "project_specific")
     }
-    system_prompt = f"""
-You are a precise technical translator.
-Translate the supplied engineering parameter display fields from
-{ai_language_name(source_language)} to {ai_language_name(target_language)}.
-
-Return only one valid JSON object with the exact same structure.
-Rules:
-- Keep every key value exactly unchanged.
-- Translate label and rationale natural-language text.
-- Translate every natural-language unit word into the target language.
-- Unit words such as hours and meters must not remain in the source language.
-- Preserve technical unit symbols exactly, including %, mm, cm, m, kg, kW, V, and A.
-- Preserve null values and all value types.
-- Do not add, remove, reorder, summarize, or reinterpret parameters.
-"""
-    response = get_text_client().chat.completions.create(
-        model=TRANSLATION_MODEL,
-        temperature=0,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-        ],
+    translated = _translate_structured_text(
+        payload,
+        source_language,
+        target_language,
+        "engineering parameters",
+        (
+            "Keep every parameter key value exactly unchanged.",
+            "Preserve numeric values, ranges, and structured expressions exactly.",
+            "unit_text is ordinary natural-language text and must be translated.",
+            "Preserve technical unit symbols such as m, mm, cm, kg, %, Wh, W, "
+            "kW, N, kN, V, A, and °C exactly.",
+        ),
     )
-    content = response.choices[0].message.content
-    if not content:
-        raise RuntimeError("Empty response from OpenAI")
-    translated = json.loads(content)
-    _validate_matching_structure(payload, translated, "engineering_parameters")
 
-    fields = translated["project_specific"]
     display = deepcopy(original)
-    technical_units = {"%", "mm", "cm", "m", "kg", "kW", "V", "A"}
-    for source, target, translated_field in zip(
-        original["project_specific"],
-        display["project_specific"],
-        fields,
-    ):
-        if translated_field["key"] != source["key"]:
-            raise ValueError("Translation changed engineering parameter key")
-        if (
-            source["unit"] in technical_units
-            and translated_field["unit"] != source["unit"]
+    for group_name in ("universal", "project_specific"):
+        for source, target, translated_field in zip(
+            original[group_name],
+            display[group_name],
+            translated[group_name],
         ):
-            raise ValueError("Translation changed a technical unit symbol")
-        if (
-            source["unit"]
-            and source["unit"] not in technical_units
-            and translated_field["unit"] == source["unit"]
-        ):
-            raise ValueError("Translation left a textual unit untranslated")
-        target["label"] = translated_field["label"]
-        target["rationale"] = translated_field["rationale"]
-        target["unit"] = translated_field["unit"]
+            if translated_field["key"] != source["key"]:
+                raise ValueError("Translation changed engineering parameter key")
+            if group_name == "project_specific":
+                target["label"] = translated_field["label"]
+            value = source["value"]
+            if value and "=" not in value and any(char.isalpha() for char in value):
+                target["value"] = translated_field["value"]
+            unit = source["unit"] or ""
+            if unit.isalpha() and unit.islower() and len(unit) > 3:
+                target["unit"] = translated_field["unit_text"]
+            if source["rationale"] is not None:
+                target["rationale"] = translated_field["rationale"]
     return validate_parameter_set(display)

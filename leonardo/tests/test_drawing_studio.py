@@ -224,7 +224,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
         heading for heading in headings if heading[0] == "Engineering Data"
     )
     assert engineering_heading[2] == {}
-    assert spaces == [40, 40]
+    assert spaces == [40, 40, "small"]
     assert tuple(image_type for image_type, _images in rendered_slots) == (
         MODERN_CONCEPT_IMAGE_TYPES
     )
@@ -315,6 +315,12 @@ def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
     assert "<rect" in top_markup
     assert ">1200 mm<" in top_markup
     assert ">800 mm<" in top_markup
+    assert top_markup.count("<svg ") == top_markup.count("</svg>") == 1
+    svg_start = top_markup.index("<svg ")
+    svg_end = top_markup.index("</svg>")
+    assert svg_start < top_markup.index("<line ") < svg_end
+    assert svg_start < top_markup.index("<text ", svg_start) < svg_end
+    assert "\n" not in top_markup
     assert "<rect" not in front_markup
     assert "Missing geometry" in front_markup
 
@@ -864,6 +870,7 @@ def test_drawing_package_export_uses_single_download_button(monkeypatch):
     assert buttons[0]["label"] == "Export Drawing Package"
     assert buttons[0]["data"] == b"%PDF-package"
     assert buttons[0]["mime"] == "application/pdf"
+    assert buttons[0]["width"] == "content"
 
 
 def test_assembly_numbering_does_not_mix_concepts():
