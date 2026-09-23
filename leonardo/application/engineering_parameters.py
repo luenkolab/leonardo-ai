@@ -1,6 +1,7 @@
 from threading import Lock
 
 from application.concepts import load_concept
+from application.images import MODERN_CONCEPT_IMAGE_TYPES, get_concept_image_slots
 from database import (
     get_engineering_parameter_set,
     get_engineering_parameter_set_source_language,
@@ -106,6 +107,12 @@ def run_ai_engineer(
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
     components = build_general_arrangement(concept_data, current).components
+    image_slots = get_concept_image_slots(concept_id, MODERN_CONCEPT_IMAGE_TYPES)
+    modern_images = tuple(
+        (image_type, image_slots[image_type][4])
+        for image_type in MODERN_CONCEPT_IMAGE_TYPES
+        if image_type in image_slots
+    )
     suggestions = suggest_engineering_data(
         concept_data,
         category,
@@ -113,6 +120,7 @@ def run_ai_engineer(
         language,
         current,
         components,
+        modern_images,
     )
     merged = merge_ai_engineering_data(
         current,
@@ -226,10 +234,33 @@ def save_component_geometry_values(
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
     if any(values.values()):
-        canonical["component_geometry"][key] = {
-            **values,
-            "unit": normalized_unit,
+        existing = canonical["component_geometry"].get(key, {})
+        preserved = {
+            field: existing[field]
+            for field in (
+                "primitive",
+                "wall_thickness",
+                "orientation",
+                "features",
+                "subgeometry",
+            )
+            if field in existing
         }
+        if "position" in existing:
+            canonical["component_geometry"][key] = {
+                **preserved,
+                **{field: values[field] for field in ("length", "width", "height")},
+                "position": {field: values[field] for field in ("x", "y", "z")},
+                "unit": normalized_unit,
+                "source": "user",
+            }
+        else:
+            canonical["component_geometry"][key] = {
+                **preserved,
+                **values,
+                "unit": normalized_unit,
+                "source": "user",
+            }
     else:
         canonical["component_geometry"].pop(key, None)
     save_engineering_parameter_set(concept_id, canonical)

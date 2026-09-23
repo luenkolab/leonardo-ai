@@ -1,14 +1,27 @@
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 
 ProvenanceType = Literal["engineering_parameter", "concept_data"]
 QuantityType = Literal["length", "mass"]
 NormalizedUnit = Literal["mm", "kg"]
 ViewType = Literal["top", "front", "side"]
+PrimitiveType = Literal[
+    "box",
+    "beam",
+    "plate",
+    "tube",
+    "cylinder",
+    "shaft",
+    "frame",
+    "panel",
+    "shell",
+    "truss",
+    "custom",
+]
 
 _NUMBER_PATTERN = re.compile(r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$")
 _ENVELOPE_PART_PATTERN = re.compile(
@@ -55,11 +68,22 @@ class Position(_StrictModel):
     z: NormalizedValue | None = None
 
 
+class Orientation(_StrictModel):
+    roll: Decimal | None = None
+    pitch: Decimal | None = None
+    yaw: Decimal | None = None
+
+
 class GeneralArrangementComponent(_StrictModel):
     key: str = Field(min_length=1)
     name: str = Field(min_length=1)
+    primitive: PrimitiveType = "box"
     dimensions: Dimensions = Field(default_factory=Dimensions)
+    wall_thickness: NormalizedValue | None = None
     position: Position | None = None
+    orientation: Orientation | None = None
+    features: tuple[str, ...] = ()
+    subgeometry: tuple["GeneralArrangementComponent", ...] = ()
 
 
 class GeneralArrangementUnits(_StrictModel):
@@ -97,10 +121,12 @@ class DisplayRectangle(_StrictModel):
 class ComponentProjection(_StrictModel):
     component_key: str = Field(min_length=1)
     component_name: str = Field(min_length=1)
+    primitive: PrimitiveType = "box"
     horizontal_size: NormalizedValue
     vertical_size: NormalizedValue
     horizontal_position: NormalizedValue
     vertical_position: NormalizedValue
+    wall_thickness: NormalizedValue | None = None
     out_of_envelope: bool
 
 
@@ -265,7 +291,7 @@ def _stored_measurement(value, unit, field, component_key):
     )
     if normalized is None or normalized.quantity != "length":
         return None
-    if field in {"length", "width", "height"} and normalized.value <= 0:
+    if field in {"length", "width", "height", "wall_thickness"} and normalized.value <= 0:
         return None
     if field in {"x", "y", "z"} and normalized.value < 0:
         return None
@@ -285,16 +311,88 @@ def _stored_geometry(component_geometry, component_key):
             for field in ("length", "width", "height")
         }
     )
+    wall_thickness = _stored_measurement(
+        geometry.get("wall_thickness"), unit, "wall_thickness", component_key
+    )
+    raw_position = geometry.get("position")
+    position_values = raw_position if isinstance(raw_position, dict) else geometry
     coordinates = {
-        field: _stored_measurement(geometry.get(field), unit, field, component_key)
+        field: _stored_measurement(
+            position_values.get(field), unit, field, component_key
+        )
         for field in ("x", "y", "z")
     }
     position = Position(**coordinates) if any(coordinates.values()) else None
-    return dimensions, position
+    raw_orientation = geometry.get("orientation")
+    try:
+        orientation = (
+            Orientation.model_validate(raw_orientation, strict=False)
+            if isinstance(raw_orientation, dict) and any(raw_orientation.values())
+            else None
+        )
+    except ValidationError:
+        orientation = None
+    primitive = geometry.get("primitive") or "box"
+    features = tuple(geometry.get("features") or ())
+    subgeometry = []
+    for raw_item in geometry.get("subgeometry") or ():
+        if not isinstance(raw_item, dict) or not raw_item.get("key"):
+            continue
+        child_key = str(raw_item["key"]).strip()
+        child_geometry = {**raw_item, "unit": raw_item.get("unit") or unit}
+        diameter = child_geometry.get("diameter")
+        child_geometry["width"] = child_geometry.get("width") or diameter
+        child_geometry["height"] = child_geometry.get("height") or diameter
+        stored = _stored_geometry({child_key: child_geometry}, child_key)
+        if stored is None:
+            continue
+        (
+            child_dimensions,
+            child_position,
+            child_primitive,
+            child_wall_thickness,
+            child_orientation,
+            child_features,
+            child_subgeometry,
+        ) = stored
+        if child_position is None or not any(
+            (child_dimensions.length, child_dimensions.width, child_dimensions.height)
+        ):
+            continue
+        subgeometry.append(
+            GeneralArrangementComponent(
+                key=f"{component_key}.{child_key}",
+                name=raw_item.get("role") or child_key,
+                primitive=child_primitive,
+                dimensions=child_dimensions,
+                wall_thickness=child_wall_thickness,
+                position=child_position,
+                orientation=child_orientation,
+                features=child_features,
+                subgeometry=child_subgeometry,
+            )
+        )
+    return (
+        dimensions,
+        position,
+        primitive,
+        wall_thickness,
+        orientation,
+        features,
+        tuple(subgeometry),
+    )
 
 
 def _merge_geometry(concept_dimensions, concept_position, stored):
-    stored_dimensions, stored_position = stored or (Dimensions(), None)
+    (
+        stored_dimensions,
+        stored_position,
+        primitive,
+        wall_thickness,
+        orientation,
+        features,
+        subgeometry,
+    ) = stored or (Dimensions(), None, "box", None, None, (), ())
     dimensions = Dimensions(
         **{
             field: getattr(stored_dimensions, field)
@@ -308,7 +406,15 @@ def _merge_geometry(concept_dimensions, concept_position, stored):
         for field in ("x", "y", "z")
     }
     position = Position(**coordinates) if any(coordinates.values()) else None
-    return dimensions, position
+    return (
+        dimensions,
+        position,
+        primitive,
+        wall_thickness,
+        orientation,
+        features,
+        subgeometry,
+    )
 
 
 def _build_components(concept_data, component_geometry):
@@ -325,13 +431,26 @@ def _build_components(concept_data, component_geometry):
                 continue
             key = _component_key(name, index, used_keys)
             stored = _stored_geometry(component_geometry, key)
-            dimensions, position = _merge_geometry(Dimensions(), None, stored)
+            (
+                dimensions,
+                position,
+                primitive,
+                wall_thickness,
+                orientation,
+                features,
+                subgeometry,
+            ) = _merge_geometry(Dimensions(), None, stored)
             components.append(
                 GeneralArrangementComponent(
                     key=key,
                     name=name,
+                    primitive=primitive,
                     dimensions=dimensions,
+                    wall_thickness=wall_thickness,
                     position=position,
+                    orientation=orientation,
+                    features=features,
+                    subgeometry=subgeometry,
                 )
             )
             continue
@@ -343,7 +462,15 @@ def _build_components(concept_data, component_geometry):
             continue
         key = _component_key(item.get("key") or name, index, used_keys)
         stored = _stored_geometry(component_geometry, key)
-        dimensions, position = _merge_geometry(
+        (
+            dimensions,
+            position,
+            primitive,
+            wall_thickness,
+            orientation,
+            features,
+            subgeometry,
+        ) = _merge_geometry(
             _structured_dimensions(item.get("dimensions"), key),
             _structured_position(item.get("position"), key),
             stored,
@@ -352,8 +479,13 @@ def _build_components(concept_data, component_geometry):
             GeneralArrangementComponent(
                 key=key,
                 name=name,
+                primitive=primitive,
                 dimensions=dimensions,
+                wall_thickness=wall_thickness,
                 position=position,
+                orientation=orientation,
+                features=features,
+                subgeometry=subgeometry,
             )
         )
     return tuple(components)
@@ -465,7 +597,37 @@ def calculate_display_rectangle(view, max_width=220, max_height=130):
     )
 
 
-def build_component_projections(arrangement, view):
+def oriented_component_dimensions(component):
+    """Apply only safe axis-aligned quarter-turn orientation to dimensions."""
+    dimensions = {
+        "x": component.dimensions.length,
+        "y": component.dimensions.width,
+        "z": component.dimensions.height,
+    }
+    orientation = component.orientation
+    if orientation is None:
+        return component.dimensions
+    angles = tuple(
+        getattr(orientation, field) or Decimal("0")
+        for field in ("roll", "pitch", "yaw")
+    )
+    if any(angle % 90 for angle in angles):
+        return component.dimensions
+    for angle, axes in zip(angles, (("y", "z"), ("x", "z"), ("x", "y"))):
+        if int(angle / 90) % 2:
+            first, second = axes
+            dimensions[first], dimensions[second] = (
+                dimensions[second],
+                dimensions[first],
+            )
+    return Dimensions(
+        length=dimensions["x"],
+        width=dimensions["y"],
+        height=dimensions["z"],
+    )
+
+
+def build_component_projections(arrangement, view, zero_origin=False):
     """Project only complete component geometry into a known envelope view."""
     axis_map = {
         "top": ("length", "width", "x", "y"),
@@ -476,14 +638,29 @@ def build_component_projections(arrangement, view):
         axis_map[view.key]
     )
     projections = []
-    for component in arrangement.components:
+    components = getattr(arrangement, "components", arrangement)
+    pending = [(component, zero_origin) for component in components]
+    while pending:
+        component, use_zero_origin = pending.pop(0)
         if component.position is None:
             continue
+        position = component.position
+        if use_zero_origin:
+            position = Position(
+                **{
+                    field: value.model_copy(update={"value": Decimal("0")})
+                    if value is not None
+                    else None
+                    for field in ("x", "y", "z")
+                    if (value := getattr(position, field)) is not None
+                }
+            )
+        dimensions = oriented_component_dimensions(component)
         values = (
-            getattr(component.dimensions, horizontal_size),
-            getattr(component.dimensions, vertical_size),
-            getattr(component.position, horizontal_position),
-            getattr(component.position, vertical_position),
+            getattr(dimensions, horizontal_size),
+            getattr(dimensions, vertical_size),
+            getattr(position, horizontal_position),
+            getattr(position, vertical_position),
         )
         if not all(values):
             continue
@@ -500,13 +677,29 @@ def build_component_projections(arrangement, view):
             ComponentProjection(
                 component_key=component.key,
                 component_name=component.name,
+                primitive=component.primitive,
                 horizontal_size=h_size,
                 vertical_size=v_size,
                 horizontal_position=h_position,
                 vertical_position=v_position,
+                wall_thickness=component.wall_thickness,
                 out_of_envelope=out_of_envelope,
             )
         )
+        for child in component.subgeometry:
+            if child.position is None:
+                continue
+            absolute = {}
+            for field in ("x", "y", "z"):
+                parent_value = getattr(position, field)
+                child_value = getattr(child.position, field)
+                if parent_value is not None and child_value is not None:
+                    absolute[field] = child_value.model_copy(
+                        update={"value": parent_value.value + child_value.value}
+                    )
+            pending.append(
+                (child.model_copy(update={"position": Position(**absolute)}), False)
+            )
     return tuple(projections)
 
 

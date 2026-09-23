@@ -35,6 +35,7 @@ from services.general_arrangement_service import (
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
+    oriented_component_dimensions,
 )
 from ui.components import render_generated_section_heading, render_result_box
 from ui.concept_page import _render_concept_image_slot, _safe_pdf_filename
@@ -242,6 +243,21 @@ def _render_engineering_parameters(
                 get_concept_prompt(concept_id),
                 language,
             )
+            for parameter in parameter_set["universal"]:
+                value_key = (
+                    f"engineering_parameter_value_{concept_id}_"
+                    f"{parameter['key']}_{language}"
+                )
+                if parameter["key"] == "overall_dimensions_envelope":
+                    st.session_state.pop(f"{value_key}_view", None)
+                    st.session_state.pop(f"{value_key}_edit", None)
+                else:
+                    st.session_state.pop(value_key, None)
+                st.session_state.pop(
+                    f"engineering_parameter_unit_{concept_id}_"
+                    f"{parameter['key']}_{language}",
+                    None,
+                )
             st.rerun()
         except (RuntimeError, ValueError):
             st.error(translate("engineering_parameters.suggestion_error", language))
@@ -439,6 +455,98 @@ def _render_component_geometry_inputs(concept_id, general_arrangement, language)
                 st.rerun()
 
 
+def _primitive_shape_markup(
+    primitive,
+    component_key,
+    x,
+    y,
+    width,
+    height,
+    view_key,
+    wall_thickness=None,
+):
+    key_attribute = f'data-component-key="{html.escape(component_key)}" '
+    common = (
+        f'{key_attribute}data-primitive="{primitive}" '
+        'fill="rgba(39, 125, 161, 0.24)" stroke="#277da1" '
+        'stroke-width="1.2"'
+    )
+    rectangle = (
+        f'<rect {common} x="{x:.2f}" y="{y:.2f}" '
+        f'width="{width:.2f}" height="{height:.2f}"/>'
+    )
+    if primitive == "box":
+        return rectangle
+
+    right = x + width
+    bottom = y + height
+    center_x = x + width / 2
+    center_y = y + height / 2
+    inset = min(width, height) * 0.18
+    if wall_thickness is not None:
+        inset = max(1.0, min(float(wall_thickness), min(width, height) / 2 - 1.0))
+    inner_width = max(0.0, width - 2 * inset)
+    inner_height = max(0.0, height - 2 * inset)
+    line_style = 'stroke="#277da1" stroke-width="1" fill="none"'
+
+    if primitive == "beam":
+        return (
+            rectangle
+            + f'<line x1="{x:.2f}" y1="{y + height * 0.22:.2f}" '
+            f'x2="{right:.2f}" y2="{y + height * 0.22:.2f}" {line_style}/>'
+            + f'<line x1="{x:.2f}" y1="{y + height * 0.78:.2f}" '
+            f'x2="{right:.2f}" y2="{y + height * 0.78:.2f}" {line_style}/>'
+        )
+    if primitive in {"plate", "panel"}:
+        lines = (
+            f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
+            f'y2="{center_y:.2f}" {line_style}/>'
+        )
+        if primitive == "panel":
+            lines += (
+                f'<line x1="{center_x:.2f}" y1="{y:.2f}" x2="{center_x:.2f}" '
+                f'y2="{bottom:.2f}" {line_style}/>'
+            )
+        return rectangle + lines
+    if primitive in {"tube", "frame"}:
+        return (
+            rectangle
+            + f'<rect x="{x + inset:.2f}" y="{y + inset:.2f}" '
+            f'width="{inner_width:.2f}" height="{inner_height:.2f}" '
+            'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="1"/>'
+        )
+    if primitive in {"cylinder", "shaft"}:
+        if abs(width - height) < 0.01:
+            return (
+                f'<ellipse {common} cx="{center_x:.2f}" cy="{center_y:.2f}" '
+                f'rx="{width / 2:.2f}" ry="{height / 2:.2f}"/>'
+            )
+        radius = min(height / 2, width / 4)
+        return (
+            f'<rect {common} x="{x:.2f}" y="{y:.2f}" width="{width:.2f}" '
+            f'height="{height:.2f}" rx="{radius:.2f}"/>'
+            + f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
+            f'y2="{center_y:.2f}" stroke="#277da1" stroke-width="0.8" '
+            'stroke-dasharray="4 3"/>'
+        )
+    if primitive == "shell":
+        return (
+            f'<path {key_attribute}data-primitive="shell" '
+            f'd="M{x:.2f},{bottom:.2f} Q{center_x:.2f},{y:.2f} '
+            f'{right:.2f},{bottom:.2f} Z" fill="rgba(39, 125, 161, 0.24)" '
+            'stroke="#277da1" stroke-width="1.2"/>'
+        )
+    if primitive == "truss":
+        return (
+            rectangle
+            + f'<line x1="{x:.2f}" y1="{y:.2f}" x2="{right:.2f}" '
+            f'y2="{bottom:.2f}" {line_style}/>'
+            + f'<line x1="{right:.2f}" y1="{y:.2f}" x2="{x:.2f}" '
+            f'y2="{bottom:.2f}" {line_style}/>'
+        )
+    return rectangle.replace('/>', ' stroke-dasharray="5 3"/>')
+
+
 def _general_arrangement_view_markup(
     view,
     title,
@@ -484,12 +592,22 @@ def _general_arrangement_view_markup(
             )
             * display.scale
         )
+        wall_thickness = (
+            projection.wall_thickness.value * display.scale
+            if projection.wall_thickness is not None
+            else None
+        )
         component_rectangles.append(
-            f'<rect data-component-key="{html.escape(projection.component_key)}" '
-            f'x="{component_x:.2f}" y="{component_y:.2f}" '
-            f'width="{component_width:.2f}" height="{component_height:.2f}" '
-            'fill="rgba(39, 125, 161, 0.24)" stroke="#277da1" '
-            'stroke-width="1.2"/>'
+            _primitive_shape_markup(
+                projection.primitive,
+                projection.component_key,
+                component_x,
+                component_y,
+                component_width,
+                component_height,
+                view.key,
+                wall_thickness,
+            )
         )
         item_number = assembly_item_numbers.get(projection.component_key)
         if item_number is not None:
@@ -502,7 +620,12 @@ def _general_arrangement_view_markup(
                 f'{item_number}</text>'
             )
     components_markup = "\n    ".join(component_rectangles)
-
+    main_rectangle = (
+        f'<rect x="{rectangle_x:.2f}" y="{rectangle_y:.2f}" '
+        f'width="{rectangle_width:.2f}" height="{rectangle_height:.2f}" '
+        'fill="rgba(102, 177, 214, 0.10)" stroke="#315f78" '
+        'stroke-width="1.8"/>'
+    )
     return "".join(f"""
 <div style="border:1px solid rgba(73, 112, 140, 0.32); border-radius:10px; padding:10px; margin-top:10px; background:rgba(229, 242, 250, 0.18);">
   <div style="font-weight:650; margin:2px 4px 4px;">{safe_title}</div>
@@ -512,7 +635,7 @@ def _general_arrangement_view_markup(
         <path d="M0,0 L7,3.5 L0,7 Z" fill="#315f78"/>
       </marker>
     </defs>
-    <rect x="{rectangle_x:.2f}" y="{rectangle_y:.2f}" width="{rectangle_width:.2f}" height="{rectangle_height:.2f}" fill="rgba(102, 177, 214, 0.10)" stroke="#315f78" stroke-width="1.8"/>
+    {main_rectangle}
     {components_markup}
     <line x1="{rectangle_x:.2f}" y1="{horizontal_y:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y:.2f}" stroke="#315f78" stroke-width="1" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
     <line x1="{rectangle_x:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#6b8798" stroke-width="0.8"/>
@@ -628,7 +751,7 @@ def _render_assembly_drawings(general_arrangement, language):
 
 def _component_detail_view_data(general_arrangement):
     return tuple(
-        (component, build_dimension_views(component.dimensions))
+        (component, build_dimension_views(oriented_component_dimensions(component)))
         for component in general_arrangement.components
         if any(
             (
@@ -663,6 +786,9 @@ def _render_component_detail_drawings(general_arrangement, language):
                                 language,
                             ),
                             missing_message,
+                            component_projections=build_component_projections(
+                                (component,), view, zero_origin=True
+                            ),
                         ),
                         unsafe_allow_html=True,
                     )

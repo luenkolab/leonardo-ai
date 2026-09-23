@@ -397,6 +397,140 @@ def _component_geometry(**overrides):
     return geometry
 
 
+def test_svg_renderer_uses_legacy_box_fallback_and_distinct_primitives():
+    legacy = _orthographic_arrangement({"part": _component_geometry()})
+    beam = _orthographic_arrangement(
+        {"part": _component_geometry(primitive="beam")}
+    )
+    tube = _orthographic_arrangement(
+        {
+            "part": _component_geometry(
+                primitive="tube",
+                wall_thickness="5",
+            )
+        }
+    )
+    cylinder = _orthographic_arrangement(
+        {
+            "part": _component_geometry(
+                primitive="cylinder", width="50", height="50"
+            )
+        }
+    )
+
+    def markup(arrangement, view_index):
+        view = drawing_studio_page.build_envelope_views(arrangement)[view_index]
+        projections = drawing_studio_page.build_component_projections(
+            arrangement,
+            view,
+        )
+        return drawing_studio_page._general_arrangement_view_markup(
+            view,
+            "View",
+            "Missing geometry",
+            projections,
+        )
+
+    legacy_top = markup(legacy, 0)
+    beam_top = markup(beam, 0)
+    tube_top = markup(tube, 0)
+    cylinder_front = markup(cylinder, 1)
+
+    assert 'data-primitive="box"' in legacy_top
+    assert 'data-primitive="beam"' in beam_top
+    assert beam_top.count("<line ") > legacy_top.count("<line ")
+    assert 'data-primitive="tube"' in tube_top
+    assert tube_top.count("<rect ") > legacy_top.count("<rect ")
+    assert 'data-primitive="cylinder"' in cylinder_front
+    assert "<ellipse " in cylinder_front
+
+
+def test_svg_renderer_reuses_primitive_renderer_for_parent_relative_subgeometry():
+    arrangement = _orthographic_arrangement(
+        {
+            "part": _component_geometry(
+                primitive="box",
+                subgeometry=[
+                    {
+                        "key": "left_wheel",
+                        "role": "wheel",
+                        "primitive": "cylinder",
+                        "length": "80",
+                        "diameter": "40",
+                        "unit": "mm",
+                        "position": {"x": "100", "y": "0", "z": "0"},
+                        "orientation": {"roll": "90", "pitch": "0", "yaw": "0"},
+                    }
+                ],
+            )
+        }
+    )
+    top = drawing_studio_page.build_envelope_views(arrangement)[0]
+    projections = drawing_studio_page.build_component_projections(arrangement, top)
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+    )
+
+    assert 'data-component-key="part"' in markup
+    assert 'data-component-key="part.left_wheel"' in markup
+    assert 'data-primitive="cylinder"' in markup
+
+    component, detail_views = drawing_studio_page._component_detail_view_data(
+        arrangement
+    )[0]
+    detail_top = next(view for view in detail_views if view.key == "top")
+    detail_markup = drawing_studio_page._general_arrangement_view_markup(
+        detail_top,
+        "Top View",
+        "Missing geometry",
+        component_projections=drawing_studio_page.build_component_projections(
+            (component,),
+            detail_top,
+            zero_origin=True,
+        ),
+    )
+    assert 'data-component-key="part.left_wheel"' in detail_markup
+
+
+def test_legacy_geometry_without_subgeometry_keeps_existing_markup():
+    arrangement = _orthographic_arrangement({"part": _component_geometry()})
+    top = drawing_studio_page.build_envelope_views(arrangement)[0]
+    projections = drawing_studio_page.build_component_projections(arrangement, top)
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+    )
+
+    assert markup.count('data-component-key="part"') == 1
+    assert "part." not in markup
+
+
+def test_component_detail_renderer_uses_component_primitive():
+    arrangement = _orthographic_arrangement(
+        {"frame": _component_geometry(primitive="frame", wall_thickness="5")}
+    )
+    component, views = drawing_studio_page._component_detail_view_data(arrangement)[0]
+
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        views[0],
+        "Top View",
+        "Missing geometry",
+        component_projections=drawing_studio_page.build_component_projections(
+            (component,), views[0], zero_origin=True
+        ),
+    )
+
+    assert 'data-primitive="frame"' in markup
+    assert markup.count("<rect ") >= 2
+
+
 def test_drawing_package_expanders_keep_existing_renderers_and_bom(monkeypatch):
     arrangement = _orthographic_arrangement(
         {

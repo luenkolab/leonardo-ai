@@ -107,6 +107,7 @@ def test_component_geometry_survives_validation_save_and_load(
     parameter_set["project_specific"] = [_project_parameter("payload", "25")]
     parameter_set["component_geometry"] = {
         "main-frame": {
+            "source": "user",
             "length": "1.2",
             "width": None,
             "height": "0.6",
@@ -123,6 +124,7 @@ def test_component_geometry_survives_validation_save_and_load(
     loaded = database.get_engineering_parameter_set(concept_id)
 
     assert loaded["component_geometry"]["main_frame"] == {
+        "source": "user",
         "length": "1.2",
         "width": None,
         "height": "0.6",
@@ -134,6 +136,89 @@ def test_component_geometry_survives_validation_save_and_load(
     assert _universal(loaded, "mass_weight")["value"] == "25"
     assert loaded["project_specific"][0]["value"] == "25"
     assert "unknown_top_level" not in loaded
+
+
+def test_component_geometry_parses_universal_primitive_fields():
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["component_geometry"] = {
+        "support": {
+            "primitive": "Tube",
+            "length": "1200",
+            "width": "80",
+            "height": "80",
+            "wall_thickness": "4",
+            "unit": "mm",
+            "position": {"x": "10", "y": "20", "z": "0"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "features": ["hollow", "hollow", "open ends"],
+        }
+    }
+
+    geometry = service.validate_parameter_set(parameter_set)["component_geometry"][
+        "support"
+    ]
+
+    assert geometry == {
+        "length": "1200",
+        "width": "80",
+        "height": "80",
+        "wall_thickness": "4",
+        "primitive": "tube",
+        "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+        "features": ["hollow", "open ends"],
+        "position": {"x": "10", "y": "20", "z": "0"},
+        "unit": "mm",
+    }
+
+    parameter_set["component_geometry"]["support"]["primitive"] = "unsupported"
+    with pytest.raises(ValueError, match="Unsupported component primitive"):
+        service.validate_parameter_set(parameter_set)
+
+
+def test_component_geometry_validates_structured_subgeometry():
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["component_geometry"] = {
+        "platform": {
+            "source": "ai",
+            "primitive": "box",
+            "length": "1000",
+            "width": "600",
+            "height": "300",
+            "unit": "mm",
+            "subgeometry": [
+                {
+                    "key": "left-wheel",
+                    "role": "wheel",
+                    "primitive": "cylinder",
+                    "length": "80",
+                    "diameter": "240",
+                    "unit": "mm",
+                    "position": {"x": "100", "y": "0", "z": "0"},
+                    "orientation": {"roll": "90", "pitch": "0", "yaw": "0"},
+                }
+            ],
+        }
+    }
+
+    geometry = service.validate_parameter_set(parameter_set)["component_geometry"][
+        "platform"
+    ]
+
+    assert geometry["subgeometry"] == [
+        {
+            "key": "left_wheel",
+            "role": "wheel",
+            "primitive": "cylinder",
+            "length": "80",
+            "width": None,
+            "height": None,
+            "diameter": "240",
+            "wall_thickness": None,
+            "position": {"x": "100", "y": "0", "z": "0"},
+            "orientation": {"roll": "90", "pitch": "0", "yaw": "0"},
+            "unit": "mm",
+        }
+    ]
 
 
 def _component_keys(concept_data, parameter_set=None):
@@ -280,19 +365,23 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
                 **_universal(parameter_set, "overall_dimensions_envelope"),
                 "value": "length=2; width=1; height=1.5",
                 "unit": "m",
-                "source": "ai",
+                "source": "model",
+                "status": "completed",
                 "rationale": "Preliminary purpose-based scale",
             }
         ],
-        "project_specific": [_project_parameter("payload", "25", "suggested")],
+        "project_specific": [_project_parameter("payload", "25", "ai", "model")],
         "component_geometry": {
             "main_frame": {
+                "source": "model",
+                "primitive": "frame",
                 "length": "2",
                 "width": "1",
                 "height": "1.5",
-                "x": "0",
-                "y": "0",
-                "z": "0",
+                "wall_thickness": "0.05",
+                "position": {"x": "0", "y": "0", "z": "0"},
+                "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+                "features": ["open perimeter", "cross members"],
                 "unit": "m",
             }
         },
@@ -322,14 +411,77 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
 
     assert len(calls) == 1
     assert result["universal"][0]["key"] == "overall_dimensions_envelope"
+    assert result["universal"][0]["source"] == "ai"
+    assert result["universal"][0]["status"] == "suggested"
     assert result["project_specific"][0]["key"] == "payload"
+    assert result["project_specific"][0]["source"] == "ai"
+    assert result["project_specific"][0]["status"] == "suggested"
     assert result["component_geometry"]["main_frame"]["length"] == "2"
+    assert result["component_geometry"]["main_frame"]["source"] == "ai"
+    assert result["component_geometry"]["main_frame"]["primitive"] == "frame"
+    assert result["component_geometry"]["main_frame"]["position"]["x"] == "0"
+    assert result["component_geometry"]["main_frame"]["features"] == [
+        "open perimeter",
+        "cross members",
+    ]
     prompt = "\n".join(message["content"] for message in calls[0]["messages"])
     assert "Original startup prompt" in prompt
     assert "technical_requirements" in prompt
     assert "engineering_parameters" in prompt
     assert "realistic physical scale" in prompt
-    assert "Never infer confirmed physical scale from images" in prompt
+    assert "Never derive or claim verified engineering dimensions" in prompt
+    assert "primitive" in prompt
+    assert "structural" in prompt
+    assert "topology" in prompt
+    assert "minimum corner" in prompt
+    assert "envelope origin (0, 0, 0)" in prompt
+    assert "x + length <=" in prompt
+    assert "Position and dimensions for a component must use the same unit" in prompt
+    assert "do not silently" in prompt
+    assert "user-sourced component geometry" in prompt
+    assert "AI-sourced component geometry may be regenerated or refined" in prompt
+    assert isinstance(calls[0]["messages"][1]["content"], str)
+
+
+def test_ai_engineer_includes_available_modern_images_in_one_request(
+    monkeypatch,
+    valid_concept,
+):
+    payload = {
+        "universal": [],
+        "project_specific": [],
+        "component_geometry": {},
+        "connections": [],
+    }
+    calls = []
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))]
+    )
+    client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=lambda **kwargs: calls.append(kwargs) or response
+            )
+        )
+    )
+    monkeypatch.setattr(service, "get_text_client", lambda: client)
+
+    service.suggest_engineering_data(
+        valid_concept,
+        "robotics_automation",
+        "Prompt",
+        "en",
+        service.build_empty_parameter_set(),
+        [],
+        (("modern_concept_1", b"first"), ("modern_concept_3", b"third")),
+    )
+
+    assert len(calls) == 1
+    content = calls[0]["messages"][1]["content"]
+    assert content[0]["type"] == "text"
+    assert [item["type"] for item in content[1:]] == ["image_url", "image_url"]
+    assert content[1]["image_url"]["url"] == "data:image/png;base64,Zmlyc3Q="
+    assert content[2]["image_url"]["url"] == "data:image/png;base64,dGhpcmQ="
 
 
 def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
@@ -352,12 +504,15 @@ def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
     ]
     current["component_geometry"] = {
         "frame": {
+            "source": "user",
+            "primitive": "beam",
             "length": "1000",
             "width": None,
             "height": None,
             "x": "0",
             "y": None,
             "z": None,
+            "features": ["user-defined flange"],
             "unit": "mm",
         }
     }
@@ -395,12 +550,14 @@ def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
     ]
     suggestions["component_geometry"] = {
         "frame": {
+            "primitive": "truss",
             "length": "2",
             "width": "50",
             "height": "25",
             "x": "5",
             "y": "10",
             "z": "0",
+            "features": ["ai diagonal"],
             "unit": "cm",
         },
         "unknown": {
@@ -452,18 +609,67 @@ def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
     assert project_by_key["duty_cycle"]["value"] == "8 h"
     assert "obsolete" not in project_by_key
     assert merged["component_geometry"]["frame"] == {
+        "source": "user",
+        "primitive": "beam",
         "length": "1000",
-        "width": "500",
-        "height": "250",
+        "width": None,
+        "height": None,
         "x": "0",
-        "y": "100",
-        "z": "0",
+        "y": None,
+        "z": None,
+        "features": ["user-defined flange"],
         "unit": "mm",
     }
     assert "unknown" not in merged["component_geometry"]
     assert merged["connections"][0]["connection_type"] == "User bolted"
     assert len(merged["connections"]) == 2
     assert merged["connections"][1]["component_b"] == "sensor"
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_length", "expected_z", "expected_source"),
+    (
+        ("ai", "2", "5", "ai"),
+        ("user", "100", "10", "user"),
+        (None, "100", "10", None),
+    ),
+    ids=("ai-refreshes", "user-protected", "legacy-protected"),
+)
+def test_component_geometry_refresh_respects_entry_source(
+    source,
+    expected_length,
+    expected_z,
+    expected_source,
+):
+    current = service.build_empty_parameter_set()
+    geometry = {
+        "length": "100",
+        "width": "50",
+        "height": "25",
+        "position": {"x": "0", "y": "0", "z": "10"},
+        "unit": "mm",
+    }
+    if source is not None:
+        geometry["source"] = source
+    current["component_geometry"] = {"frame": geometry}
+    suggestions = service.build_empty_parameter_set()
+    suggestions["component_geometry"] = {
+        "frame": {
+            "source": "ai",
+            "length": "2",
+            "width": "1",
+            "height": "0.5",
+            "position": {"x": "0", "y": "0", "z": "5"},
+            "unit": "cm",
+        }
+    }
+
+    merged = service.merge_ai_engineering_data(current, suggestions, {"frame"})
+    merged_geometry = merged["component_geometry"]["frame"]
+
+    assert merged_geometry["length"] == expected_length
+    assert merged_geometry["position"]["z"] == expected_z
+    assert merged_geometry.get("source") == expected_source
 
 
 def test_ai_engineer_application_saves_only_current_concept(
@@ -488,10 +694,18 @@ def test_ai_engineer_application_saves_only_current_concept(
             "rationale": "Project context",
         }
     ]
+    suggestion_calls = []
+    monkeypatch.setattr(
+        parameter_application,
+        "get_concept_image_slots",
+        lambda concept_id, image_types: {
+            "modern_concept_1": (1, concept_id, "modern_concept_1", "prompt", b"png")
+        },
+    )
     monkeypatch.setattr(
         parameter_application,
         "suggest_engineering_data",
-        lambda *args: suggestions,
+        lambda *args: suggestion_calls.append(args) or suggestions,
     )
 
     parameter_application.run_ai_engineer(
@@ -510,6 +724,7 @@ def test_ai_engineer_application_saves_only_current_concept(
         == "25"
     )
     assert database.get_engineering_parameter_set(second_id) is None
+    assert suggestion_calls[0][-1] == (("modern_concept_1", b"png"),)
 
 
 def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
@@ -969,6 +1184,15 @@ def test_ai_engineer_button_runs_one_workflow(monkeypatch):
     calls = []
     reruns = []
     button_keys = []
+    session_state = {
+        "engineering_parameter_value_12_mass_weight_en": "",
+        "engineering_parameter_unit_12_mass_weight_en": "",
+        "engineering_parameter_value_12_overall_dimensions_envelope_en_view": "",
+        "engineering_parameter_value_12_overall_dimensions_envelope_en_edit": "",
+        "engineering_parameter_unit_12_overall_dimensions_envelope_en": "",
+        "engineering_parameter_project_specific_value_12_payload_en": "25",
+        "unrelated": "preserved",
+    }
     monkeypatch.setattr(
         drawing_studio_page,
         "get_engineering_parameter_set",
@@ -990,7 +1214,7 @@ def test_ai_engineer_button_runs_one_workflow(monkeypatch):
         "save_engineering_parameter_values",
         lambda *args: None,
     )
-    monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
+    monkeypatch.setattr(drawing_studio_page.st, "session_state", session_state)
     def click_ai_engineer(_label, **kwargs):
         button_keys.append(kwargs.get("key"))
         return kwargs.get("key") == "engineering_parameters_ai_engineer_12"
@@ -1024,6 +1248,10 @@ def test_ai_engineer_button_runs_one_workflow(monkeypatch):
     assert "engineering_parameters_suggest_12" not in button_keys
     assert "engineering_parameters_edit_12_project_specific" not in button_keys
     assert "engineering_parameters_save_12_project_specific" not in button_keys
+    assert session_state == {
+        "engineering_parameter_project_specific_value_12_payload_en": "25",
+        "unrelated": "preserved",
+    }
     assert reruns == [True]
 
 

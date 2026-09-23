@@ -1,9 +1,11 @@
+import base64
 import json
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from typing import get_args
 
 from i18n import ai_language_name
-from services.general_arrangement_service import normalize_known_value
+from services.general_arrangement_service import PrimitiveType
 from services.openai_client import get_text_client
 
 
@@ -15,14 +17,7 @@ PARAMETER_STATUSES = {
     "not_applicable",
 }
 PARAMETER_SOURCES = {"user", "ai", "concept"}
-COMPONENT_GEOMETRY_FIELDS = ("length", "width", "height", "x", "y", "z")
 COMPONENT_GEOMETRY_UNITS = {"mm", "cm", "m"}
-_LENGTH_UNIT_TO_MM = {
-    "mm": Decimal("1"),
-    "cm": Decimal("10"),
-    "m": Decimal("1000"),
-}
-
 UNIVERSAL_PARAMETER_DEFINITIONS = (
     ("overall_dimensions_envelope", "Overall Dimensions / Envelope"),
     ("mass_weight", "Mass / Weight"),
@@ -130,17 +125,139 @@ def validate_parameter_set(value):
         key = normalize_parameter_key(raw_key)
         if not isinstance(raw_geometry, dict):
             raise ValueError(f"Component geometry must be an object for {key}")
-        geometry = {
-            field: _optional_text(raw_geometry.get(field))
-            for field in COMPONENT_GEOMETRY_FIELDS
-        }
-        if not any(geometry.values()):
-            continue
-        unit = _optional_text(raw_geometry.get("unit"))
-        if unit is None or unit.casefold() not in COMPONENT_GEOMETRY_UNITS:
-            raise ValueError(f"Unsupported component geometry unit for {key}")
-        geometry["unit"] = unit.casefold()
-        component_geometry[key] = geometry
+        raw_children = raw_geometry.get("subgeometry", [])
+        if not isinstance(raw_children, list):
+            raise ValueError(f"Component subgeometry must be an array for {key}")
+        records = [(key, raw_geometry, False)]
+        seen_children = set()
+        for raw_child in raw_children:
+            if not isinstance(raw_child, dict):
+                raise ValueError(f"Component subgeometry must contain objects for {key}")
+            child_key = normalize_parameter_key(raw_child.get("key"))
+            if child_key not in seen_children:
+                seen_children.add(child_key)
+                records.append((f"{key}.{child_key}", raw_child, True))
+
+        normalized_records = {}
+        parent_unit = _optional_text(raw_geometry.get("unit"))
+        for record_key, raw_record, is_child in records:
+            fields = (
+                ("length", "width", "height", "diameter", "wall_thickness")
+                if is_child
+                else ("length", "width", "height")
+            )
+            geometry = {
+                field: _optional_text(raw_record.get(field)) for field in fields
+            }
+            source = _optional_text(raw_record.get("source"))
+            if source is not None:
+                source = source.casefold()
+                if source not in {"ai", "user"}:
+                    raise ValueError(f"Unsupported component geometry source for {record_key}")
+                geometry["source"] = source
+            if not is_child and "wall_thickness" in raw_record:
+                geometry["wall_thickness"] = _optional_text(
+                    raw_record.get("wall_thickness")
+                )
+
+            primitive = _optional_text(raw_record.get("primitive"))
+            if primitive is not None:
+                primitive = primitive.casefold()
+                if primitive not in get_args(PrimitiveType):
+                    raise ValueError(f"Unsupported component primitive for {record_key}")
+                geometry["primitive"] = primitive
+            elif "primitive" in raw_record:
+                geometry["primitive"] = None
+            if is_child:
+                if primitive is None:
+                    raise ValueError(
+                        f"Unsupported component subgeometry primitive for {record_key}"
+                    )
+                geometry.update(
+                    key=record_key.rsplit(".", 1)[-1],
+                    role=_optional_text(raw_record.get("role")),
+                )
+
+            raw_position = raw_record.get("position")
+            if raw_position is not None and not isinstance(raw_position, dict):
+                raise ValueError(f"Component position must be an object for {record_key}")
+            position_source = raw_position if raw_position is not None else raw_record
+            position = {
+                field: _optional_text(position_source.get(field))
+                for field in ("x", "y", "z")
+            }
+            if raw_position is not None:
+                if any(position.values()) or "position" in raw_record:
+                    geometry["position"] = position
+            elif not is_child:
+                geometry.update(position)
+
+            raw_orientation = raw_record.get("orientation")
+            if raw_orientation is not None and not isinstance(raw_orientation, dict):
+                raise ValueError(f"Component orientation must be an object for {record_key}")
+            orientation = {
+                field: _optional_text((raw_orientation or {}).get(field))
+                for field in ("roll", "pitch", "yaw")
+            }
+            nonzero_angles = []
+            for field, raw_angle in orientation.items():
+                if raw_angle is None:
+                    continue
+                try:
+                    angle = Decimal(raw_angle)
+                except InvalidOperation as exc:
+                    raise ValueError(
+                        f"Component orientation must be numeric for {record_key}.{field}"
+                    ) from exc
+                if not angle.is_finite() or angle % 90:
+                    raise ValueError(
+                        f"Unsupported component orientation for {record_key}.{field}"
+                    )
+                if angle % 360:
+                    nonzero_angles.append(angle)
+            if len(nonzero_angles) > 1:
+                raise ValueError(f"Unsupported combined orientation for {record_key}")
+            if raw_orientation is not None:
+                geometry["orientation"] = orientation
+
+            raw_features = raw_record.get("features", [])
+            if not isinstance(raw_features, list):
+                raise ValueError(f"Component features must be an array for {record_key}")
+            if "features" in raw_record:
+                geometry["features"] = list(
+                    dict.fromkeys(
+                        feature
+                        for item in raw_features
+                        if isinstance(item, str)
+                        and (feature := _optional_text(item)) is not None
+                    )
+                )
+
+            unit = _optional_text(raw_record.get("unit")) or parent_unit
+            if unit is not None:
+                unit = unit.casefold()
+            if any(geometry.get(field) for field in fields) or any(position.values()):
+                if unit not in COMPONENT_GEOMETRY_UNITS:
+                    raise ValueError(f"Unsupported component geometry unit for {record_key}")
+            if unit is not None:
+                if unit not in COMPONENT_GEOMETRY_UNITS or (
+                    is_child and parent_unit is not None and unit != parent_unit.casefold()
+                ):
+                    raise ValueError(f"Component subgeometry unit must match parent for {key}")
+                geometry["unit"] = unit
+            normalized_records[record_key] = geometry
+
+        geometry = normalized_records[key]
+        if "subgeometry" in raw_geometry:
+            geometry["subgeometry"] = [
+                normalized_records[f"{key}.{child_key}"] for child_key in seen_children
+            ]
+        if any(
+            value is not None
+            for field, value in geometry.items()
+            if field not in {"source", "features", "orientation", "subgeometry"}
+        ) or any(field in geometry for field in ("features", "orientation", "subgeometry")):
+            component_geometry[key] = geometry
     raw_connections = value.get("connections", [])
     if not isinstance(raw_connections, list):
         raise ValueError("Connections must be a JSON array")
@@ -204,11 +321,11 @@ def _ai_parameters(parameters, universal=False):
                 continue
             candidate["key"] = key
             candidate["label"] = definitions[key]
-        parameter = normalize_parameter(candidate, "ai")
-        parameter["source"] = "ai"
-        parameter["status"] = (
-            "missing" if parameter["value"] is None else "suggested"
+        candidate["source"] = "ai"
+        candidate["status"] = (
+            "missing" if _optional_text(candidate.get("value")) is None else "suggested"
         )
+        parameter = normalize_parameter(candidate, "ai")
         if parameter["value"] is not None and not parameter["rationale"]:
             raise ValueError("AI engineering suggestions require a rationale")
         normalized.append(parameter)
@@ -222,6 +339,7 @@ def suggest_engineering_data(
     language,
     parameter_set,
     components,
+    modern_images=(),
 ):
     """Make one shared-client call for all missing engineering data."""
     current = validate_parameter_set(parameter_set)
@@ -239,18 +357,34 @@ def suggest_engineering_data(
 You are the AI Engineer for a physical-product concept. Work in this exact order:
 1. Complete only missing Universal Core engineering parameters.
 2. Generate project-specific parameters using the completed Core context.
-3. Complete only missing component geometry fields.
+3. Generate or refine AI-sourced component geometry fields.
 4. Add only missing connections between supplied stable component keys.
 
 Return exactly one JSON object with these existing contract keys:
 universal, project_specific, component_geometry, connections.
 Universal and project_specific items use key, label, value, unit, status, source,
-rationale. Geometry fields are length, width, height, x, y, z, unit. Connection
-fields are component_a, component_b, connection_type, fastener_type, quantity, note.
+rationale. Component geometry fields are source, primitive, length, width, height,
+wall_thickness, unit, position, orientation, features, and optional subgeometry.
+Each subgeometry item uses key, role, an existing supported primitive, optional
+length, width, height, diameter, wall_thickness, unit, parent-relative position,
+and orientation. Position uses optional
+x, y, z values for the component's minimum corner, measured from the overall
+envelope origin (0, 0, 0). Orientation uses optional roll, pitch, yaw angles in
+degrees. Features is an array of concise structural-form strings.
+Connection fields are component_a, component_b, connection_type, fastener_type,
+quantity, note.
 
 Rules:
 - Write labels and rationale in {ai_language_name(language)}.
-- Never replace non-empty Core values or existing component geometry fields.
+- Never replace user-sourced, concept-sourced, or otherwise protected non-AI Core
+  values. Existing AI-sourced Core assumptions may be regenerated or refined when
+  new engineering or visual evidence requires it.
+- Never replace user-sourced component geometry.
+  AI-sourced component geometry may be regenerated or refined.
+- For each supplied component, infer a primitive and only support these values:
+  box, beam, plate, tube, cylinder, shaft, frame, panel, shell, truss, custom.
+  Use features for approximate structural form/topology, and connections for
+  component relationships. Use box when no more specific form is supported.
 - Rebuild project_specific for the current context on every run. Recalculate records
   whose current source is "ai"; do not replace records with a non-AI source.
 - Keep existing connections and add only genuinely missing component pairs.
@@ -261,12 +395,28 @@ Rules:
   wearables use body scale, industrial equipment uses industrial scale, and drones
   use mission/payload scale.
 - No image pixels or visual proportions are available as authoritative dimensions.
-  Never infer confirmed physical scale from images.
+  Modern reference images may inform only visible component identity, structural
+  form, topology, relative placement, visible subcomponents/features, and
+  approximate orientation. Never derive or claim verified engineering dimensions
+  from image pixels or visual scale. Numeric dimensions must come from existing
+  user values, Core or Project-Specific Parameters, or explicit preliminary AI
+  engineering assumptions when data is missing.
 - Overall Dimensions / Envelope, when proposed, must be labelled axes in the form
   "length=<number>; width=<number>; height=<number>" with one of mm, cm, or m.
 - Component geometry may reference only the supplied stable component keys. Use the
   existing component unit when a partial geometry record already has one.
-- Dimensions must be positive numbers. Coordinates may be zero or positive.
+- Position and dimensions for a component must use the same unit. When the overall
+  envelope axes and required component fields are known, require x + length <=
+  envelope length, y + width <= envelope width, and z + height <= envelope height.
+  If a component intentionally extends outside the stated envelope, do not silently
+  move or resize it to fit; leave the contradictory geometry assumption unresolved.
+- Dimensions and wall_thickness must be positive numbers. Position coordinates may
+  be zero or positive. Orientation angles may be positive, zero, or negative.
+- Use structured subgeometry only for justified visible or conceptual structural
+  features, never decorative complexity. Subgeometry positions are relative to the
+  parent component's minimum corner and use the same unit as the parent. For
+  renderable orthographic geometry, use axis-aligned orientations in 90-degree
+  increments; do not imply a full CAD transform.
 - Connections may reference only two different supplied component keys. Quantity is
   a positive integer or null.
 - Do not invent unsupported precision, certification, compliance, safety validation,
@@ -274,13 +424,29 @@ Rules:
   value cannot be supported by the structured project context.
 - Do not return extra top-level keys.
 """
+    user_content = json.dumps(context, ensure_ascii=False)
+    if modern_images:
+        user_content = [
+            {"type": "text", "text": user_content},
+            *(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "data:image/png;base64,"
+                        + base64.b64encode(image_bytes).decode("ascii"),
+                        "detail": "low",
+                    },
+                }
+                for _image_type, image_bytes in modern_images
+            ),
+        ]
     response = get_text_client().chat.completions.create(
         model=ENGINEERING_PARAMETERS_MODEL,
         temperature=0.1,
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            {"role": "user", "content": user_content},
         ],
     )
     content = response.choices[0].message.content
@@ -289,45 +455,38 @@ Rules:
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("AI Engineer response must be a JSON object")
+    component_geometry = payload.get("component_geometry", {})
+    if isinstance(component_geometry, dict):
+        component_geometry = {
+            key: (
+                {**geometry, "source": "ai"}
+                if isinstance(geometry, dict)
+                else geometry
+            )
+            for key, geometry in component_geometry.items()
+        }
     normalized = validate_parameter_set(
         {
             "universal": _ai_parameters(payload.get("universal", []), True),
             "project_specific": _ai_parameters(
                 payload.get("project_specific", [])
             ),
-            "component_geometry": payload.get("component_geometry", {}),
+            "component_geometry": component_geometry,
             "connections": payload.get("connections", []),
         }
     )
     return normalized
 
 
-def _converted_geometry_value(value, source_unit, target_unit, field, component_key):
-    normalized = normalize_known_value(
-        value,
-        source_unit,
-        source_type="engineering_parameter",
-        source_key=f"component_geometry.{component_key}.{field}",
-    )
-    if normalized is None or normalized.quantity != "length":
-        return None
-    if field in {"length", "width", "height"} and normalized.value <= 0:
-        return None
-    if field in {"x", "y", "z"} and normalized.value < 0:
-        return None
-    converted = normalized.value / _LENGTH_UNIT_TO_MM[target_unit]
-    return format(converted.normalize(), "f")
-
-
 def merge_ai_engineering_data(parameter_set, suggestions, valid_component_keys):
-    """Fill missing fields while preserving every existing non-empty value."""
+    """Merge suggestions while protecting user and legacy component geometry."""
     current = validate_parameter_set(parameter_set)
     incoming = validate_parameter_set(suggestions)
     incoming_universal = {item["key"]: item for item in incoming["universal"]}
     for parameter in current["universal"]:
         suggestion = incoming_universal.get(parameter["key"])
         if (
-            parameter["value"] is not None
+            (parameter["value"] is not None and parameter["source"] != "ai")
             or not suggestion
             or suggestion["value"] is None
         ):
@@ -373,23 +532,17 @@ def merge_ai_engineering_data(parameter_set, suggestions, valid_component_keys):
         if component_key not in valid_keys:
             continue
         existing = current["component_geometry"].get(component_key)
-        target_unit = existing["unit"] if existing else suggestion["unit"]
-        merged_geometry = dict(existing or {"unit": target_unit})
-        for field in COMPONENT_GEOMETRY_FIELDS:
-            if merged_geometry.get(field) is not None or suggestion.get(field) is None:
-                continue
-            merged_geometry[field] = _converted_geometry_value(
-                suggestion[field],
-                suggestion["unit"],
-                target_unit,
-                field,
-                component_key,
-            )
+        if existing is not None and existing.get("source") != "ai":
+            continue
+        merged_geometry = {**suggestion, "source": "ai"}
         if any(
-            merged_geometry.get(field) is not None
-            for field in COMPONENT_GEOMETRY_FIELDS
+            value
+            for field, value in merged_geometry.items()
+            if field not in {"source", "unit"}
         ):
             current["component_geometry"][component_key] = merged_geometry
+        else:
+            current["component_geometry"].pop(component_key, None)
 
     connection_keys = {
         frozenset((item["component_a"], item["component_b"]))

@@ -13,6 +13,7 @@ from services.general_arrangement_service import (
     calculate_display_rectangle,
     has_prepared_geometry,
     normalize_known_value,
+    oriented_component_dimensions,
 )
 
 
@@ -435,6 +436,7 @@ def test_component_geometry_saves_by_stable_key_without_replacing_other_data(
 
     assert set(stored["component_geometry"]) == {"structural_frame", "control_unit"}
     assert stored["component_geometry"]["structural_frame"]["length"] == "1.2"
+    assert stored["component_geometry"]["structural_frame"]["source"] == "user"
     assert len(stored["universal"]) == 11
     assert next(
         item["value"]
@@ -503,6 +505,34 @@ def test_partial_stored_geometry_preserves_known_concept_dimensions():
     assert component.dimensions.width.value == Decimal("500")
     assert component.dimensions.height.value == Decimal("300")
     assert component.position.x.value == Decimal("100")
+
+
+def test_structured_component_primitive_geometry_is_loaded_without_inference():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "primitive": "tube",
+            "length": "1000",
+            "width": "100",
+            "height": "100",
+            "wall_thickness": "5",
+            "unit": "mm",
+            "position": {"x": "10", "y": "20", "z": "30"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "features": ["hollow", "open ends"],
+        }
+    }
+
+    component = build_general_arrangement(
+        {"system_components": [{"key": "frame", "name": "Frame"}]},
+        parameter_set,
+    ).components[0]
+
+    assert component.primitive == "tube"
+    assert component.wall_thickness.value == Decimal("5")
+    assert component.position.x.value == Decimal("10")
+    assert component.orientation.yaw == Decimal("90")
+    assert component.features == ("hollow", "open ends")
 
 
 def test_partial_stored_dimensions_preserve_known_concept_position():
@@ -645,3 +675,35 @@ def test_out_of_envelope_projection_is_flagged_without_changing_geometry():
     assert projection.out_of_envelope is True
     assert arrangement.components[0].position.x.value == Decimal("400")
     assert arrangement.components[0].dimensions.length.value == Decimal("200")
+
+
+def test_orthogonal_orientation_swaps_display_axes_without_mutating_source():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=500; width=400; height=300",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "200",
+            "width": "100",
+            "height": "50",
+            "position": {"x": "0", "y": "0", "z": "0"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "unit": "mm",
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    component = arrangement.components[0]
+
+    oriented = oriented_component_dimensions(component)
+
+    assert (oriented.length.value, oriented.width.value, oriented.height.value) == (
+        Decimal("100"),
+        Decimal("200"),
+        Decimal("50"),
+    )
+    assert component.dimensions.length.value == Decimal("200")
