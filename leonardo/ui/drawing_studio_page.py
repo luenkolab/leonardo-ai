@@ -7,6 +7,7 @@ import streamlit as st
 from application.concepts import (
     ConceptLoadError,
     list_recent_concepts,
+    load_concept,
     load_concept_for_viewer,
 )
 from application.engineering_parameters import (
@@ -69,8 +70,9 @@ def _format_overall_envelope_for_viewer(value, language):
     }
     return re.sub(
         r"\b(length|width|height)(?=\s*=)",
-        lambda match: labels[match.group(1)],
+        lambda match: labels[match.group(1).casefold()],
         value,
+        flags=re.IGNORECASE,
     )
 
 
@@ -165,7 +167,8 @@ def _render_system_components(concept_data, language):
 
 def _render_engineering_parameters(
     concept_id,
-    concept_data,
+    canonical_concept_data,
+    viewer_concept_data,
     category,
     language,
 ):
@@ -230,15 +233,9 @@ def _render_engineering_parameters(
         st.rerun()
     if ai_engineer_clicked:
         try:
-            save_engineering_parameter_values(
-                concept_id,
-                parameter_set,
-                "universal",
-                rendered_values,
-            )
             run_ai_engineer(
                 concept_id,
-                concept_data,
+                canonical_concept_data,
                 category,
                 get_concept_prompt(concept_id),
                 language,
@@ -271,7 +268,7 @@ def _render_engineering_parameters(
         language,
         False,
     )
-    _render_system_components(concept_data, language)
+    _render_system_components(viewer_concept_data, language)
 
 
 def _get_current_category(concept_id):
@@ -554,7 +551,7 @@ def _general_arrangement_view_markup(
     component_projections=(),
     assembly_item_numbers=None,
 ):
-    display = calculate_display_rectangle(view)
+    display = calculate_display_rectangle(view, projections=component_projections)
     safe_title = html.escape(title)
     if display is None:
         return f"""
@@ -566,10 +563,13 @@ def _general_arrangement_view_markup(
 
     area_x, area_y = 65.0, 30.0
     area_width, area_height = 220.0, 130.0
-    rectangle_width = float(display.width)
-    rectangle_height = float(display.height)
-    rectangle_x = area_x + (area_width - rectangle_width) / 2
-    rectangle_y = area_y + (area_height - rectangle_height) / 2
+    rectangle_width = float(view.horizontal.value * display.scale)
+    rectangle_height = float(view.vertical.value * display.scale)
+    rectangle_x = area_x + (area_width - float(display.width)) / 2
+    rectangle_y = (
+        area_y + (area_height - float(display.height)) / 2
+        + float(display.height) - rectangle_height
+    )
     horizontal_y = rectangle_y + rectangle_height + 28
     vertical_x = rectangle_x - 28
     horizontal_label = html.escape(_measurement_label(view.horizontal))
@@ -578,8 +578,6 @@ def _general_arrangement_view_markup(
     assembly_item_numbers = assembly_item_numbers or {}
     component_rectangles = []
     for projection in component_projections:
-        if projection.out_of_envelope:
-            continue
         component_width = float(projection.horizontal_size.value * display.scale)
         component_height = float(projection.vertical_size.value * display.scale)
         component_x = rectangle_x + float(
@@ -1211,7 +1209,15 @@ def _drawing_package_export_data(
                 "missing_message": missing_message,
                 "groups": tuple(
                     _export_view_group(
-                        tuple((view, ()) for view in views),
+                        tuple(
+                            (
+                                view,
+                                build_component_projections(
+                                    (component,), view, zero_origin=True
+                                ),
+                            )
+                            for view in views
+                        ),
                         language,
                         title=component.name,
                     )
@@ -1298,14 +1304,16 @@ def render_drawing_studio():
         return
 
     try:
-        concept_data, _source_language = load_concept_for_viewer(
+        canonical_concept_data = load_concept(concept_id)
+        viewer_concept_data, _source_language = load_concept_for_viewer(
             concept_id,
             language,
         )
     except ConceptLoadError:
-        concept_data = None
+        canonical_concept_data = None
+        viewer_concept_data = None
 
-    if concept_data is None:
+    if canonical_concept_data is None or viewer_concept_data is None:
         st.error(translate("sidebar.open_error", language))
         return
 
@@ -1317,7 +1325,7 @@ def render_drawing_studio():
     )
     render_result_box(
         translate("drawing_studio.project", language),
-        concept_data["title"],
+        viewer_concept_data["title"],
     )
     render_result_box(
         translate("common.category", language),
@@ -1325,7 +1333,7 @@ def render_drawing_studio():
     )
     render_result_box(
         translate("drawing_studio.short_summary", language),
-        concept_data["executive_summary"],
+        viewer_concept_data["executive_summary"],
     )
 
     render_generated_section_heading(
@@ -1349,7 +1357,7 @@ def render_drawing_studio():
     ):
         render_result_box(
             translate(label_key, language),
-            concept_data[field_name],
+            viewer_concept_data[field_name],
             visual_variant="blue",
         )
 
@@ -1360,7 +1368,8 @@ def render_drawing_studio():
     )
     _render_engineering_parameters(
         concept_id,
-        concept_data,
+        canonical_concept_data,
+        viewer_concept_data,
         category,
         language,
     )
@@ -1372,12 +1381,29 @@ def render_drawing_studio():
     parameter_set = validate_parameter_set(
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
-    general_arrangement = build_general_arrangement(concept_data, parameter_set)
+    viewer_parameter_set = load_engineering_parameters_for_viewer(concept_id, language)
+    general_arrangement = build_general_arrangement(
+        canonical_concept_data, parameter_set
+    )
+    viewer_components = viewer_concept_data.get("system_components", [])
+    if len(viewer_components) == len(general_arrangement.components):
+        general_arrangement = general_arrangement.model_copy(
+            update={
+                "components": tuple(
+                    component.model_copy(update={"name": viewer_name.strip()})
+                    if isinstance(viewer_name, str) and viewer_name.strip()
+                    else component
+                    for component, viewer_name in zip(
+                        general_arrangement.components, viewer_components
+                    )
+                )
+            }
+        )
     _render_drawing_package_sections(
         concept_id,
-        concept_data,
+        viewer_concept_data,
         general_arrangement,
-        parameter_set["connections"],
+        viewer_parameter_set["connections"],
         language,
     )
     st.space("small")
@@ -1387,9 +1413,9 @@ def render_drawing_studio():
         vertical_alignment="center",
     ):
         _render_drawing_package_export(
-            concept_data,
+            viewer_concept_data,
             category,
             general_arrangement,
-            parameter_set["connections"],
+            viewer_parameter_set["connections"],
             language,
         )

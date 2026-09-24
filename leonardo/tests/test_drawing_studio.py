@@ -1,4 +1,5 @@
 import copy
+import re
 from contextlib import nullcontext
 from datetime import datetime
 from decimal import Decimal
@@ -132,6 +133,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
     )
     monkeypatch.setattr(
         drawing_studio_page,
+        "load_engineering_parameters_for_viewer",
+        lambda _concept_id, _language: drawing_studio_page.build_empty_parameter_set(),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
         "_render_overall_envelope_inputs",
         lambda *args: envelope_input_renders.append(args),
     )
@@ -179,6 +185,11 @@ def test_studio_uses_current_concept_and_only_modern_references(
         drawing_studio_page,
         "load_concept_for_viewer",
         lambda concept_id, language: (valid_concept, "en"),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "load_concept",
+        lambda concept_id: valid_concept,
     )
     monkeypatch.setattr(
         drawing_studio_page,
@@ -242,7 +253,7 @@ def test_studio_uses_current_concept_and_only_modern_references(
     ):
         assert valid_concept[field_name] in rendered_contents
     assert engineering_parameter_renders == [
-        (91, valid_concept, "robotics_automation", "en")
+        (91, valid_concept, valid_concept, "robotics_automation", "en")
     ]
     package_titles = {
         "General Arrangement",
@@ -282,6 +293,192 @@ def test_studio_uses_current_concept_and_only_modern_references(
     assert bom_renders[0][1] is valid_concept
     assert bom_renders[0][2] == []
     assert bom_renders[0][3] == "en"
+
+
+def test_viewer_language_preserves_list_component_identity_and_geometry(monkeypatch):
+    canonical = {
+        "title": "Mobile Robot",
+        "executive_summary": "A mobile robot",
+        "system_components": ["Wheeled Platform", "Sensor Mast"],
+        "technical_requirements": [],
+        "materials": [],
+        "constraints": [],
+        "risks": [],
+    }
+    translated = {
+        "en": canonical,
+        "ru": {
+            **canonical,
+            "title": "Мобильный робот",
+            "system_components": ["Колёсная платформа", "Сенсорная мачта"],
+        },
+        "sv": {
+            **canonical,
+            "title": "Mobil robot",
+            "system_components": ["Hjulplattform", "Sensormast"],
+        },
+    }
+    parameters = drawing_studio_page.build_empty_parameter_set()
+    envelope = next(
+        item for item in parameters["universal"]
+        if item["key"] == "overall_dimensions_envelope"
+    )
+    envelope.update(value="length=1000; width=600; height=500", unit="mm")
+    parameters["component_geometry"] = {
+        "wheeled_platform": {
+            "length": "400", "width": "300", "height": "100",
+            "x": "10", "y": "20", "z": "0", "unit": "mm",
+            "subgeometry": [{
+                "key": "left_wheel", "primitive": "box",
+                "length": "40", "width": "40", "height": "40",
+                "position": {"x": "20", "y": "0", "z": "0"},
+                "unit": "mm",
+            }],
+        },
+        "sensor_mast": {
+            "length": "50", "width": "50", "height": "300",
+            "x": "200", "y": "100", "z": "100", "unit": "mm",
+        },
+    }
+    parameters["connections"] = [{
+        "component_a": "wheeled_platform",
+        "component_b": "sensor_mast",
+        "connection_type": "Bolted",
+        "fastener_type": "M8 bolts",
+        "quantity": 4,
+        "note": "Attach mast to platform",
+    }]
+    connection_text = {
+        "en": ("Bolted", "M8 bolts", "Attach mast to platform"),
+        "ru": ("Болтовое", "Болты M8", "Закрепить мачту на платформе"),
+        "sv": ("Skruvförband", "M8-bultar", "Fäst masten på plattformen"),
+    }
+    current_language = ["en"]
+    rendered = {}
+    ai_inputs = []
+
+    monkeypatch.setattr(drawing_studio_page, "get_current_language", lambda: current_language[0])
+    monkeypatch.setattr(drawing_studio_page, "get_current_concept_id", lambda: 91)
+    monkeypatch.setattr(drawing_studio_page, "load_concept", lambda _id: canonical)
+    monkeypatch.setattr(
+        drawing_studio_page, "load_concept_for_viewer",
+        lambda _id, language: (translated[language], "en"),
+    )
+    monkeypatch.setattr(drawing_studio_page, "_get_current_category", lambda _id: "robotics_automation")
+    monkeypatch.setattr(drawing_studio_page, "get_engineering_parameter_set", lambda _id: parameters)
+    monkeypatch.setattr(
+        drawing_studio_page, "load_engineering_parameters_for_viewer",
+        lambda _id, language: {
+            **parameters,
+            "connections": [{
+                **parameters["connections"][0],
+                "connection_type": connection_text[language][0],
+                "fastener_type": connection_text[language][1],
+                "note": connection_text[language][2],
+            }],
+        },
+    )
+    monkeypatch.setattr(drawing_studio_page, "_render_reference_visuals", lambda *_args: None)
+    monkeypatch.setattr(
+        drawing_studio_page, "_render_engineering_parameters",
+        lambda *args: ai_inputs.append(args),
+    )
+    monkeypatch.setattr(
+        drawing_studio_page, "_render_drawing_package_sections",
+        lambda _id, _concept, arrangement, connections, _language:
+        rendered.update({current_language[0]: (arrangement, connections)}),
+    )
+    exports = {}
+    monkeypatch.setattr(
+        drawing_studio_page, "_render_drawing_package_export",
+        lambda _concept, _category, _arrangement, connections, language:
+        exports.update({language: connections}),
+    )
+    monkeypatch.setattr(drawing_studio_page, "render_generated_section_heading", lambda *args: None)
+    monkeypatch.setattr(drawing_studio_page, "render_result_box", lambda *args, **kwargs: None)
+    monkeypatch.setattr(drawing_studio_page.st, "button", lambda *args, **kwargs: False)
+    monkeypatch.setattr(drawing_studio_page.st, "caption", lambda *args: None)
+    monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
+    monkeypatch.setattr(drawing_studio_page.st, "container", lambda **kwargs: nullcontext())
+
+    for language in ("en", "ru", "sv"):
+        current_language[0] = language
+        drawing_studio_page.render_drawing_studio()
+
+    fingerprints = []
+    for language in ("en", "ru", "sv"):
+        arrangement, connections = rendered[language]
+        assert [component.key for component in arrangement.components] == [
+            "wheeled_platform", "sensor_mast"
+        ]
+        assert [component.name for component in arrangement.components] == translated[
+            language
+        ]["system_components"]
+        assert arrangement.components[0].dimensions.length.value == Decimal("400")
+        assert arrangement.components[1].position.z.value == Decimal("100")
+        assert arrangement.components[0].subgeometry[0].key == (
+            "wheeled_platform.left_wheel"
+        )
+        assert (connections[0]["component_a"], connections[0]["component_b"]) == (
+            "wheeled_platform", "sensor_mast"
+        )
+        assert connections is exports[language]
+        assert (
+            connections[0]["connection_type"],
+            connections[0]["fastener_type"],
+            connections[0]["note"],
+        ) == connection_text[language]
+        assert connections[0]["quantity"] == 4
+        connection_fields = dict(drawing_studio_page._connection_display_data(
+            connections[0], drawing_studio_page._component_names(arrangement)
+        )["fields"])
+        assert connection_fields["connection_type"] == connection_text[language][0]
+        assert connection_fields["fastener_type"] == connection_text[language][1]
+        assert connection_fields["note"] == connection_text[language][2]
+        assert drawing_studio_page._connection_display_data(
+            connections[0], drawing_studio_page._component_names(arrangement)
+        )["components"] == (
+            f"{translated[language]['system_components'][0]} ↔ "
+            f"{translated[language]['system_components'][1]}"
+        )
+        top = drawing_studio_page.build_envelope_views(arrangement)[0]
+        fingerprints.append(tuple(
+            (
+                projection.component_key,
+                projection.horizontal_size.value,
+                projection.vertical_size.value,
+                projection.horizontal_position.value,
+                projection.vertical_position.value,
+            )
+            for projection in drawing_studio_page.build_component_projections(
+                arrangement, top
+            )
+        ))
+        bom_rows = drawing_studio_page._build_bom_rows(
+            arrangement, translated[language], connections
+        )
+        assert [row["component"] for row in bom_rows] == translated[language][
+            "system_components"
+        ]
+        assert all(connection_text[language][0] in row["connections"][0] for row in bom_rows)
+        assert all(connection_text[language][1] in row["connections"][0] for row in bom_rows)
+        assert all(connection_text[language][2] in row["notes"] for row in bom_rows)
+        package = drawing_studio_page._drawing_package_export_data(
+            translated[language], "robotics_automation", arrangement,
+            exports[language], language,
+        )
+        sections = {section["key"]: section for section in package["sections"]}
+        export_fields = dict(sections["connections_fasteners"]["connections"][0]["fields"])
+        assert tuple(export_fields.values()) == (
+            *connection_text[language][:2], "4", connection_text[language][2],
+        )
+        assert sections["bill_of_materials"]["rows"] == bom_rows
+    assert fingerprints[0] == fingerprints[1] == fingerprints[2]
+    assert {item[0] for item in fingerprints[0]} == {
+        "wheeled_platform", "wheeled_platform.left_wheel", "sensor_mast"
+    }
+    assert all(args[1] is canonical for args in ai_inputs)
+    assert parameters["connections"][0]["connection_type"] == "Bolted"
 
 
 def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
@@ -531,6 +728,54 @@ def test_component_detail_renderer_uses_component_primitive():
     assert markup.count("<rect ") >= 2
 
 
+def test_detail_without_global_position_matches_pdf_and_keeps_child(monkeypatch):
+    arrangement = _orthographic_arrangement({
+        "part": _component_geometry(
+            x=None, y=None, z=None,
+            subgeometry=[{
+                "key": "mount", "primitive": "box",
+                "length": "40", "width": "30", "height": "20",
+                "position": {"x": "50", "y": "20", "z": "0"},
+                "unit": "mm",
+            }],
+        )
+    })
+    original_geometry = arrangement.model_dump()
+    component, views = drawing_studio_page._component_detail_view_data(arrangement)[0]
+    top = views[0]
+    assert component.position is None
+    assert drawing_studio_page.build_component_projections((component,), top) == ()
+    projections = drawing_studio_page.build_component_projections(
+        (component,), top, zero_origin=True
+    )
+    assert [item.component_key for item in projections] == ["part", "part.mount"]
+    assert [item.horizontal_position.value for item in projections] == [
+        Decimal("0"), Decimal("50")
+    ]
+    assert projections[1].vertical_position.value == Decimal("20")
+
+    ui_markup = []
+    monkeypatch.setattr(drawing_studio_page.st, "container", lambda **kwargs: nullcontext())
+    monkeypatch.setattr(
+        drawing_studio_page.st, "columns", lambda _count: [nullcontext()] * 3
+    )
+    monkeypatch.setattr(
+        drawing_studio_page.st, "markdown",
+        lambda value, **kwargs: ui_markup.append(value),
+    )
+    drawing_studio_page._render_component_detail_drawings(arrangement, "en")
+    package = drawing_studio_page._drawing_package_export_data(
+        {"title": "Part", "system_components": ["part"]},
+        "Mechanical", arrangement, [], "en",
+        exported_at=datetime(2026, 9, 19, 12, 30),
+    )
+    pdf_top = package["sections"][3]["groups"][0]["views"][0]["markup"]
+    assert pdf_top in ui_markup
+    assert 'data-component-key="part"' in pdf_top
+    assert 'data-component-key="part.mount"' in pdf_top
+    assert arrangement.model_dump() == original_geometry
+
+
 def test_drawing_package_expanders_keep_existing_renderers_and_bom(monkeypatch):
     arrangement = _orthographic_arrangement(
         {
@@ -639,10 +884,15 @@ def test_orthographic_views_reuse_ga_axes_positions_and_real_dimensions():
     assert arrangement.model_dump() == original_values
 
 
-def test_orthographic_svg_omits_incomplete_and_out_of_envelope_components():
+def test_orthographic_svg_keeps_outside_geometry_and_omits_incomplete(monkeypatch):
     arrangement = _orthographic_arrangement(
         {
-            "visible": _component_geometry(),
+            "visible": _component_geometry(subgeometry=[{
+                "key": "extension", "primitive": "box",
+                "length": "40", "width": "30", "height": "20",
+                "position": {"x": "1000", "y": "0", "z": "0"},
+                "unit": "mm",
+            }]),
             "incomplete": _component_geometry(
                 length="100", width=None, height=None, x="0", y=None, z=None
             ),
@@ -650,6 +900,7 @@ def test_orthographic_svg_omits_incomplete_and_out_of_envelope_components():
         }
     )
     top, projections = drawing_studio_page._orthographic_view_data(arrangement)[1]
+    original_geometry = arrangement.model_dump()
 
     markup = drawing_studio_page._general_arrangement_view_markup(
         top,
@@ -659,11 +910,48 @@ def test_orthographic_svg_omits_incomplete_and_out_of_envelope_components():
     )
 
     assert 'data-component-key="visible"' in markup
+    assert 'data-component-key="visible.extension"' in markup
     assert 'data-component-key="incomplete"' not in markup
-    assert 'data-component-key="outside"' not in markup
+    assert 'data-component-key="outside"' in markup
     assert next(
         item for item in projections if item.component_key == "outside"
     ).out_of_envelope is True
+    outside = re.search(
+        r'<rect data-component-key="outside"[^>]* x="([\d.]+)" '
+        r'y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"',
+        markup,
+    )
+    assert outside is not None
+    x, y, width, height = map(float, outside.groups())
+    assert 65 <= x < x + width <= 285
+    assert 30 <= y < y + height <= 160
+    extension = re.search(
+        r'<rect data-component-key="visible.extension"[^>]* x="([\d.]+)" '
+        r'y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"',
+        markup,
+    )
+    assert extension is not None
+    child_x, child_y, child_width, child_height = map(float, extension.groups())
+    assert 65 <= child_x < child_x + child_width <= 285
+    assert 30 <= child_y < child_y + child_height <= 160
+    assert '>1000 mm<' in markup
+    assert arrangement.model_dump() == original_geometry
+
+    warnings = []
+    monkeypatch.setattr(
+        drawing_studio_page.st, "columns", lambda _count: [nullcontext()] * 3
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "markdown", lambda *args, **kwargs: None)
+    monkeypatch.setattr(drawing_studio_page.st, "warning", warnings.append)
+    drawing_studio_page._render_projected_views(((top, projections),), "en")
+    assert len(warnings) == 1 and "outside" in warnings[0]
+
+    assembly = drawing_studio_page._general_arrangement_view_markup(
+        top, "Top View", "Missing geometry", projections,
+        {"visible": 1, "outside": 3},
+    )
+    assert 'data-assembly-item="1"' in assembly
+    assert 'data-assembly-item="3"' in assembly
 
 
 def test_orthographic_views_do_not_mix_concepts():
@@ -749,7 +1037,8 @@ def test_assembly_markers_omit_unrenderable_components_without_losing_identity()
     )
     assert 'data-assembly-item="1"' in markup
     assert 'data-component-key="incomplete"' not in markup
-    assert 'data-component-key="outside"' not in markup
+    assert 'data-component-key="outside"' in markup
+    assert 'data-assembly-item="3"' in markup
 
 
 def test_assembly_main_ui_renders_numbered_views_without_component_legend(monkeypatch):

@@ -580,19 +580,34 @@ def build_envelope_views(arrangement):
     return build_dimension_views(arrangement.overall_envelope)
 
 
-def calculate_display_rectangle(view, max_width=220, max_height=130):
-    """Scale known real dimensions into a fixed display area without mutation."""
+def calculate_display_rectangle(view, max_width=220, max_height=130, projections=()):
+    """Scale the envelope and projected geometry into one display area."""
     if view.horizontal is None or view.vertical is None:
         return None
+    projections = tuple(projections)
     width_limit = Decimal(str(max_width))
     height_limit = Decimal(str(max_height))
+    horizontal_extent = max((
+        view.horizontal.value,
+        *(
+            projection.horizontal_position.value + projection.horizontal_size.value
+            for projection in projections
+        ),
+    ))
+    vertical_extent = max((
+        view.vertical.value,
+        *(
+            projection.vertical_position.value + projection.vertical_size.value
+            for projection in projections
+        ),
+    ))
     scale = min(
-        width_limit / view.horizontal.value,
-        height_limit / view.vertical.value,
+        width_limit / horizontal_extent,
+        height_limit / vertical_extent,
     )
     return DisplayRectangle(
-        width=view.horizontal.value * scale,
-        height=view.vertical.value * scale,
+        width=horizontal_extent * scale,
+        height=vertical_extent * scale,
         scale=scale,
     )
 
@@ -642,29 +657,27 @@ def build_component_projections(arrangement, view, zero_origin=False):
     pending = [(component, zero_origin) for component in components]
     while pending:
         component, use_zero_origin = pending.pop(0)
-        if component.position is None:
-            continue
-        position = component.position
-        if use_zero_origin:
-            position = Position(
-                **{
-                    field: value.model_copy(update={"value": Decimal("0")})
-                    if value is not None
-                    else None
-                    for field in ("x", "y", "z")
-                    if (value := getattr(position, field)) is not None
-                }
-            )
         dimensions = oriented_component_dimensions(component)
+        h_size = getattr(dimensions, horizontal_size)
+        v_size = getattr(dimensions, vertical_size)
+        if not all((h_size, v_size)):
+            continue
+        if use_zero_origin:
+            zero = h_size.model_copy(
+                update={"value": Decimal("0"), "raw_value": "0"}
+            )
+            position = Position(x=zero, y=zero, z=zero)
+        else:
+            position = component.position
+            if position is None:
+                continue
         values = (
-            getattr(dimensions, horizontal_size),
-            getattr(dimensions, vertical_size),
             getattr(position, horizontal_position),
             getattr(position, vertical_position),
         )
         if not all(values):
             continue
-        h_size, v_size, h_position, v_position = values
+        h_position, v_position = values
         out_of_envelope = (
             view.horizontal is not None
             and view.vertical is not None

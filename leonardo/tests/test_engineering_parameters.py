@@ -358,7 +358,30 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
 ):
     parameter_set = service.build_empty_parameter_set()
     _universal(parameter_set, "mass_weight")["value"] = "25"
-    components = [SimpleNamespace(key="main_frame", name="Main Frame")]
+    _universal(parameter_set, "operating_environment").update(
+        value="Outdoor use", source="concept"
+    )
+    parameter_set["component_geometry"] = {
+        "main_frame": {
+            "source": "user", "primitive": "box", "length": "1",
+            "width": "1", "height": "1", "unit": "m",
+        },
+        "sensor_mast": {
+            "source": "ai", "primitive": "tube", "length": "2",
+            "width": "0.1", "height": "0.1", "unit": "m",
+            "position": {"x": "0.5", "y": "0.5", "z": "0.5"},
+            "features": ["old AI form"],
+        },
+        "legacy_cover": {
+            "primitive": "plate", "length": "0.5",
+            "width": "0.5", "height": "0.1", "unit": "m",
+        },
+    }
+    components = [
+        SimpleNamespace(key="main_frame", name="Main Frame"),
+        SimpleNamespace(key="sensor_mast", name="Sensor Mast"),
+        SimpleNamespace(key="legacy_cover", name="Legacy Cover"),
+    ]
     payload = {
         "universal": [
             {
@@ -372,16 +395,16 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
         ],
         "project_specific": [_project_parameter("payload", "25", "ai", "model")],
         "component_geometry": {
-            "main_frame": {
+            "sensor_mast": {
                 "source": "model",
-                "primitive": "frame",
-                "length": "2",
-                "width": "1",
+                "primitive": "tube",
+                "length": "0.1",
+                "width": "0.1",
                 "height": "1.5",
                 "wall_thickness": "0.05",
                 "position": {"x": "0", "y": "0", "z": "0"},
-                "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
-                "features": ["open perimeter", "cross members"],
+                "orientation": {"roll": "0", "pitch": "0", "yaw": "0"},
+                "features": ["sensor mount"],
                 "unit": "m",
             }
         },
@@ -416,14 +439,48 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
     assert result["project_specific"][0]["key"] == "payload"
     assert result["project_specific"][0]["source"] == "ai"
     assert result["project_specific"][0]["status"] == "suggested"
-    assert result["component_geometry"]["main_frame"]["length"] == "2"
-    assert result["component_geometry"]["main_frame"]["source"] == "ai"
-    assert result["component_geometry"]["main_frame"]["primitive"] == "frame"
-    assert result["component_geometry"]["main_frame"]["position"]["x"] == "0"
-    assert result["component_geometry"]["main_frame"]["features"] == [
-        "open perimeter",
-        "cross members",
+    assert set(result["component_geometry"]) == {"sensor_mast"}
+    assert result["component_geometry"]["sensor_mast"]["height"] == "1.5"
+    assert result["component_geometry"]["sensor_mast"]["source"] == "ai"
+    assert result["component_geometry"]["sensor_mast"]["primitive"] == "tube"
+    assert result["component_geometry"]["sensor_mast"]["position"]["x"] == "0"
+    assert result["component_geometry"]["sensor_mast"]["features"] == [
+        "sensor mount",
     ]
+    assert calls[0]["model"] == "gpt-5.6-sol"
+    assert "temperature" not in calls[0]
+    response_format = calls[0]["response_format"]
+    assert response_format["type"] == "json_schema"
+    assert response_format["json_schema"]["strict"] is True
+    schema = response_format["json_schema"]["schema"]
+    geometry_schema = schema["$defs"]["geometry"]
+    assert geometry_schema["properties"]["features"] == {
+        "type": "array", "items": {"type": "string"}
+    }
+    assert geometry_schema["properties"]["subgeometry"] == {
+        "type": "array", "items": {"$ref": "#/$defs/subgeometry"}
+    }
+    assert set(geometry_schema["required"]) >= {
+        "source", "primitive", "length", "width", "height",
+        "position", "orientation", "features", "subgeometry",
+    }
+    assert schema["properties"]["component_geometry"]["required"] == ["sensor_mast"]
+    request_context = json.loads(calls[0]["messages"][1]["content"])
+    context_geometry = request_context["engineering_parameters"]["component_geometry"]
+    assert context_geometry["main_frame"]["source"] == "user"
+    assert context_geometry["main_frame"]["length"] == "1"
+    assert context_geometry["legacy_cover"]["length"] == "0.5"
+    assert "source" not in context_geometry["legacy_cover"]
+    assert "sensor_mast" not in context_geometry
+    assert parameter_set["component_geometry"]["sensor_mast"]["length"] == "2"
+    assert [component["key"] for component in request_context["components"]] == [
+        "main_frame", "sensor_mast", "legacy_cover"
+    ]
+    assert next(
+        item for item in request_context["engineering_parameters"]["universal"]
+        if item["key"] == "operating_environment"
+    )["source"] == "concept"
+    assert request_context["concept_data"] == valid_concept
     prompt = "\n".join(message["content"] for message in calls[0]["messages"])
     assert "Original startup prompt" in prompt
     assert "technical_requirements" in prompt
@@ -434,12 +491,37 @@ def test_ai_engineer_uses_shared_client_for_full_engineering_context(
     assert "structural" in prompt
     assert "topology" in prompt
     assert "minimum corner" in prompt
-    assert "envelope origin (0, 0, 0)" in prompt
+    assert "assembly/envelope origin (0, 0, 0)" in prompt
     assert "x + length <=" in prompt
     assert "Position and dimensions for a component must use the same unit" in prompt
-    assert "do not silently" in prompt
-    assert "user-sourced component geometry" in prompt
-    assert "AI-sourced component geometry may be regenerated or refined" in prompt
+    assert "rather than silently shrinking, clamping, moving, or resizing" in prompt
+    assert "user-sourced or legacy component geometry" in prompt
+    assert "complete current record, not a partial" in prompt
+    assert "X = longitudinal / overall length" in prompt
+    assert "Y = transverse / overall width" in prompt
+    assert "Z = vertical / overall height" in prompt
+    assert "vertical column or mast must extend mainly along Z" in prompt
+    assert "Prefer world-aligned dimensions" in prompt
+    assert "Features is descriptive engineering metadata" in prompt
+    assert "not renderable geometry" in prompt
+    assert "represented by the parent primitive or by supported" in prompt
+    assert "Existing AI-sourced Core assumptions may be revised" in prompt
+    assert "Never replace existing user-sourced, concept-sourced, or legacy" in prompt
+    assert "not verified dimensional sources" in prompt
+    assert "Do not duplicate individual component dimensions" in prompt
+    assert "as Project-Specific Parameters" in prompt
+    assert "revise that AI" in prompt
+    assert "Previous AI component geometry is omitted from the request" in prompt
+    assert "not evidence" in prompt
+    assert "Do not copy previous AI geometry by default" in prompt
+    assert "Re-derive" in prompt
+    assert "return those parts as subgeometry rather than only features text" in prompt
+    assert "internally check its dominant" in prompt
+    assert "rather than copied from a previous AI assumption" in prompt
+    assert "structured result, not the reasoning" in prompt
+    assert 'Required AI geometry keys for this request: ["sensor_mast"]' in prompt
+    assert "COMPONENT_GEOMETRY IS REQUIRED OUTPUT" in prompt
+    assert "Do not omit" in prompt
     assert isinstance(calls[0]["messages"][1]["content"], str)
 
 
@@ -450,7 +532,15 @@ def test_ai_engineer_includes_available_modern_images_in_one_request(
     payload = {
         "universal": [],
         "project_specific": [],
-        "component_geometry": {},
+        "component_geometry": {
+            "ai_part": {
+                "source": "ai", "primitive": "box", "length": "1",
+                "width": "1", "height": "1", "unit": "m",
+                "position": {"x": "0", "y": "0", "z": "0"},
+                "orientation": {"roll": "0", "pitch": "0", "yaw": "0"},
+                "features": [],
+            },
+        },
         "connections": [],
     }
     calls = []
@@ -466,22 +556,130 @@ def test_ai_engineer_includes_available_modern_images_in_one_request(
     )
     monkeypatch.setattr(service, "get_text_client", lambda: client)
 
+    parameter_set = service.build_empty_parameter_set()
+    parameter_set["component_geometry"] = {
+        "protected_part": {"source": "user", "length": "1", "unit": "m"},
+        "ai_part": {"source": "ai", "length": "2", "unit": "m"},
+    }
     service.suggest_engineering_data(
         valid_concept,
         "robotics_automation",
         "Prompt",
         "en",
-        service.build_empty_parameter_set(),
-        [],
+        parameter_set,
+        [
+            SimpleNamespace(key="protected_part", name="Protected Part"),
+            SimpleNamespace(key="ai_part", name="AI Part"),
+        ],
         (("modern_concept_1", b"first"), ("modern_concept_3", b"third")),
     )
 
     assert len(calls) == 1
     content = calls[0]["messages"][1]["content"]
     assert content[0]["type"] == "text"
+    request_context = json.loads(content[0]["text"])
+    assert set(request_context["engineering_parameters"]["component_geometry"]) == {
+        "protected_part"
+    }
+    assert [item["key"] for item in request_context["components"]] == [
+        "protected_part", "ai_part"
+    ]
     assert [item["type"] for item in content[1:]] == ["image_url", "image_url"]
     assert content[1]["image_url"]["url"] == "data:image/png;base64,Zmlyc3Q="
     assert content[2]["image_url"]["url"] == "data:image/png;base64,dGhpcmQ="
+
+
+@pytest.mark.parametrize(
+    ("returned_keys", "protected_first", "error_message", "invalid_field"),
+    (
+        (None, False, "requires component_geometry object", None),
+        ((), False, "incomplete component_geometry", None),
+        (("component_a",), False, "incomplete component_geometry", None),
+        (("component_a", "component_b"), False, None, None),
+        (("component_a", "component_b"), False, "incomplete component_geometry record", "height"),
+        (("component_a", "component_b"), False, "Component features must be an array", "features"),
+        (("component_b",), True, None, None),
+    ),
+    ids=(
+        "missing-object", "empty", "partial", "complete", "incomplete-record",
+        "string-features", "protected-user",
+    ),
+)
+def test_ai_engineer_requires_complete_geometry_for_regeneratable_components(
+    monkeypatch, valid_concept, returned_keys, protected_first, error_message,
+    invalid_field,
+):
+    current = service.build_empty_parameter_set()
+    current["component_geometry"]["component_b"] = {
+        "source": "ai", "primitive": "box", "length": "2",
+        "width": "1", "height": "1", "unit": "m",
+    }
+    if protected_first:
+        current["component_geometry"]["component_a"] = {
+            "source": "user", "primitive": "beam", "length": "1",
+            "width": "0.2", "height": "0.2", "unit": "m",
+        }
+    components = [
+        SimpleNamespace(key="component_a", name="Component A"),
+        SimpleNamespace(key="component_b", name="Component B"),
+    ]
+    payload = {
+        "universal": [], "project_specific": [], "connections": [],
+    }
+    if returned_keys is not None:
+        payload["component_geometry"] = {
+            key: {
+                "source": "ai", "primitive": "box", "length": "1",
+                "width": "0.5", "height": "0.5", "unit": "m",
+                "position": {"x": "0", "y": "0", "z": "0"},
+                "orientation": {"roll": "0", "pitch": "0", "yaw": "0"},
+                "features": ["visible structural detail"],
+            }
+            for key in returned_keys
+        }
+    if invalid_field == "height":
+        del payload["component_geometry"]["component_b"]["height"]
+    elif invalid_field == "features":
+        payload["component_geometry"]["component_b"]["features"] = "text"
+    calls = []
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))]
+    )
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **kwargs: calls.append(kwargs) or response
+        ))
+    )
+    monkeypatch.setattr(service, "get_text_client", lambda: client)
+
+    if error_message:
+        with pytest.raises(ValueError, match=error_message):
+            service.suggest_engineering_data(
+                valid_concept, "robotics_automation", "Prompt", "en", current,
+                components,
+            )
+    else:
+        result = service.suggest_engineering_data(
+            valid_concept, "robotics_automation", "Prompt", "en", current,
+            components,
+        )
+        assert set(result["component_geometry"]) == set(returned_keys)
+
+    assert len(calls) == 1
+    request_context = json.loads(calls[0]["messages"][1]["content"])
+    context_geometry = request_context["engineering_parameters"]["component_geometry"]
+    assert "component_b" not in context_geometry
+    assert ("component_a" in context_geometry) is protected_first
+    assert [item["key"] for item in request_context["components"]] == [
+        "component_a", "component_b"
+    ]
+    required_keys = ["component_b"] if protected_first else [
+        "component_a", "component_b"
+    ]
+    assert json.dumps(required_keys) in calls[0]["messages"][0]["content"]
+    schema = calls[0]["response_format"]["json_schema"]["schema"]
+    assert schema["properties"]["component_geometry"]["required"] == required_keys
+    assert list(schema["properties"]["component_geometry"]["properties"]) == required_keys
 
 
 def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
@@ -626,6 +824,108 @@ def test_ai_engineer_merge_fills_only_missing_fields_and_preserves_user_data():
     assert merged["connections"][1]["component_b"] == "sensor"
 
 
+def test_ai_core_refinement_protects_other_sources_and_can_clear_old_assumptions():
+    current = service.build_empty_parameter_set()
+    for key, value, source, unit in (
+        ("overall_dimensions_envelope", "length=1; width=1; height=1", "ai", "m"),
+        ("mass_weight", "20", "user", "kg"),
+        ("primary_materials", "Steel", "concept", None),
+        ("design_loads_forces", "10", None, "kN"),
+        ("operating_environment", "Old AI assumption", "ai", None),
+    ):
+        parameter = _universal(current, key)
+        parameter.update(value=value, unit=unit)
+        if source is None:
+            parameter.pop("source")
+        else:
+            parameter["source"] = source
+
+    suggestions = service.build_empty_parameter_set()
+    for key, value, unit in (
+        ("overall_dimensions_envelope", "length=200; width=100; height=250", "cm"),
+        ("mass_weight", "30", "kg"),
+        ("primary_materials", "Aluminium", None),
+        ("design_loads_forces", "20", "kN"),
+        ("operating_environment", None, None),
+    ):
+        parameter = _universal(suggestions, key)
+        parameter.update(value=value, unit=unit, source="ai")
+
+    merged = service.merge_ai_engineering_data(current, suggestions, set())
+
+    envelope = _universal(merged, "overall_dimensions_envelope")
+    assert (envelope["value"], envelope["unit"], envelope["source"]) == (
+        "length=200; width=100; height=250", "cm", "ai"
+    )
+    assert _universal(merged, "mass_weight")["value"] == "20"
+    assert _universal(merged, "mass_weight")["source"] == "user"
+    assert _universal(merged, "primary_materials")["value"] == "Steel"
+    assert _universal(merged, "primary_materials")["source"] == "concept"
+    assert _universal(merged, "design_loads_forces")["value"] == "10"
+    assert _universal(merged, "design_loads_forces")["source"] == "user"
+    cleared = _universal(merged, "operating_environment")
+    assert cleared["value"] is None
+    assert cleared["unit"] is None
+    assert cleared["status"] == "missing"
+    assert cleared["source"] == "ai"
+
+
+def test_legacy_project_parameter_is_protected_while_obsolete_ai_is_removed():
+    current = service.build_empty_parameter_set()
+    legacy = _project_parameter("legacy_limit", "Keep this value", "confirmed")
+    legacy.pop("source")
+    current["project_specific"] = [
+        legacy,
+        _project_parameter("old_ai_limit", "Obsolete", "suggested"),
+    ]
+    suggestions = service.build_empty_parameter_set()
+    suggestions["project_specific"] = [
+        _project_parameter("legacy_limit", "AI replacement", "suggested"),
+        _project_parameter("new_ai_limit", "Current", "suggested"),
+    ]
+
+    merged = service.merge_ai_engineering_data(current, suggestions, set())
+    project_by_key = {item["key"]: item for item in merged["project_specific"]}
+
+    assert project_by_key["legacy_limit"]["value"] == "Keep this value"
+    assert project_by_key["legacy_limit"]["source"] == "user"
+    assert "old_ai_limit" not in project_by_key
+    assert project_by_key["new_ai_limit"]["value"] == "Current"
+
+
+def test_ai_component_geometry_replaces_complete_record_without_obsolete_child():
+    current = service.build_empty_parameter_set()
+    current["component_geometry"] = {
+        "support": {
+            "source": "ai", "primitive": "box", "length": "100",
+            "width": "30", "height": "30", "unit": "mm",
+            "features": ["old"],
+            "subgeometry": [{
+                "key": "old_child", "primitive": "box", "length": "10",
+                "width": "10", "height": "10",
+                "position": {"x": "0", "y": "0", "z": "0"}, "unit": "mm",
+            }],
+        },
+    }
+    suggestions = service.build_empty_parameter_set()
+    suggestions["component_geometry"] = {
+        "support": {
+            "source": "ai", "primitive": "tube", "length": "120",
+            "width": "20", "height": "20", "unit": "mm",
+            "features": ["new"],
+        },
+    }
+
+    merged = service.merge_ai_engineering_data(current, suggestions, {"support"})
+    geometry = merged["component_geometry"]["support"]
+
+    assert geometry["primitive"] == "tube"
+    assert geometry["length"] == "120"
+    assert geometry["features"] == ["new"]
+    assert "subgeometry" not in geometry
+    assert "old_child" not in str(geometry)
+
+
 @pytest.mark.parametrize(
     ("source", "expected_length", "expected_z", "expected_source"),
     (
@@ -713,7 +1013,7 @@ def test_ai_engineer_application_saves_only_current_concept(
         first,
         "robotics_automation",
         "First prompt",
-        "en",
+        "ru",
     )
 
     assert (
@@ -724,7 +1024,9 @@ def test_ai_engineer_application_saves_only_current_concept(
         == "25"
     )
     assert database.get_engineering_parameter_set(second_id) is None
+    assert suggestion_calls[0][3] == "en"
     assert suggestion_calls[0][-1] == (("modern_concept_1", b"png"),)
+    assert database.get_engineering_parameter_set_source_language(first_id) == "en"
 
 
 def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
@@ -766,6 +1068,7 @@ def test_studio_parameter_render_does_not_call_ai_without_explicit_click(
 
     drawing_studio_page._render_engineering_parameters(
         11,
+        {"title": "Project"},
         {"title": "Project"},
         "robotics_automation",
         "en",
@@ -958,21 +1261,19 @@ def test_parameter_value_and_unit_widget_keys_include_viewer_language(monkeypatc
 
 
 @pytest.mark.parametrize(
-    ("language", "expected"),
+    ("canonical", "language", "expected"),
     (
-        ("en", "Length=20; Width=3; Height=2"),
-        ("ru", "Длина=20; Ширина=3; Высота=2"),
-        ("sv", "Längd=20; Bredd=3; Höjd=2"),
+        ("length=20; width=3; height=2", "en", "Length=20; Width=3; Height=2"),
+        ("Length=20; WIDTH=3; hEiGhT=2", "ru", "Длина=20; Ширина=3; Высота=2"),
+        ("LENGTH=20; Width=3; HEIGHT=2", "sv", "Längd=20; Bredd=3; Höjd=2"),
     ),
 )
-def test_overall_envelope_display_labels_are_localized(language, expected):
-    canonical = "length=20; width=3; height=2"
+def test_overall_envelope_display_labels_are_localized(canonical, language, expected):
 
     assert (
         drawing_studio_page._format_overall_envelope_for_viewer(canonical, language)
         == expected
     )
-    assert canonical == "length=20; width=3; height=2"
 
 
 def test_envelope_edit_and_save_keep_canonical_syntax(
@@ -1152,6 +1453,7 @@ def test_block_saves_are_independent_and_update_internal_statuses(
     drawing_studio_page._render_engineering_parameters(
         first_id,
         valid_concept,
+        valid_concept,
         "robotics_automation",
         "en",
     )
@@ -1233,6 +1535,7 @@ def test_ai_engineer_button_runs_one_workflow(monkeypatch):
     drawing_studio_page._render_engineering_parameters(
         12,
         {"title": "Robot"},
+        {"title": "Robot"},
         "robotics_automation",
         "en",
     )
@@ -1253,6 +1556,62 @@ def test_ai_engineer_button_runs_one_workflow(monkeypatch):
         "unrelated": "preserved",
     }
     assert reruns == [True]
+
+
+def test_ai_engineer_button_does_not_save_localized_viewer_envelope(monkeypatch):
+    canonical = service.build_empty_parameter_set()
+    canonical_envelope = _universal(canonical, "overall_dimensions_envelope")
+    canonical_envelope.update(
+        value="length=1.5; width=1; height=1", unit="m", source="user"
+    )
+    viewer = copy.deepcopy(canonical)
+    _universal(viewer, "overall_dimensions_envelope")["value"] = (
+        "Длина=1.5; Ширина=1; Высота=1"
+    )
+    canonical_concept = {"system_components": ["Wheeled Platform"]}
+    viewer_concept = {"system_components": ["Колёсная платформа"]}
+    calls = []
+    saves = []
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "load_engineering_parameters_for_viewer",
+        lambda *_args: viewer,
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "_render_parameter_rows",
+        lambda *_args: {
+            "overall_dimensions_envelope":
+            ("Длина=1.5; Ширина=1; Высота=1", "m")
+        },
+    )
+    monkeypatch.setattr(
+        drawing_studio_page,
+        "save_engineering_parameter_values",
+        lambda *args: saves.append(args),
+    )
+    monkeypatch.setattr(drawing_studio_page, "run_ai_engineer", lambda *args: calls.append(args))
+    monkeypatch.setattr(drawing_studio_page, "get_concept_prompt", lambda _id: "prompt")
+    monkeypatch.setattr(drawing_studio_page, "_render_system_components", lambda *args: None)
+    monkeypatch.setattr(
+        drawing_studio_page.st, "button",
+        lambda *args, **kwargs: kwargs.get("key") == "engineering_parameters_ai_engineer_12",
+    )
+    monkeypatch.setattr(drawing_studio_page.st, "session_state", {})
+    monkeypatch.setattr(drawing_studio_page.st, "container", lambda **kwargs: nullcontext())
+    monkeypatch.setattr(drawing_studio_page.st, "subheader", lambda *args, **kwargs: None)
+    monkeypatch.setattr(drawing_studio_page.st, "space", lambda *args: None)
+    monkeypatch.setattr(drawing_studio_page.st, "rerun", lambda: None)
+
+    drawing_studio_page._render_engineering_parameters(
+        12, canonical_concept, viewer_concept, "robotics_automation", "ru"
+    )
+
+    assert saves == []
+    assert canonical_envelope["value"] == "length=1.5; width=1; height=1"
+    assert calls == [
+        (12, canonical_concept, "robotics_automation", "prompt", "ru")
+    ]
 
 
 def test_all_engineering_parameter_ui_keys_exist_for_all_languages():
@@ -1341,10 +1700,161 @@ def test_viewer_translation_is_cached_and_preserves_canonical_parameters(
     assert russian["project_specific"][0]["unit"] == "часы"
     assert _universal(russian, "primary_materials")["value"].startswith("Лёгкие")
     assert database.get_engineering_parameter_set(concept_id) == canonical
+    assert "_translation_contract_version" not in russian
+    assert database.get_engineering_parameter_translation(concept_id, "ru")[
+        "_translation_contract_version"
+    ] == 3
+
+
+@pytest.mark.parametrize("cached_version", (None, 2))
+def test_stale_engineering_translation_is_replaced_without_changing_canonical(
+    monkeypatch, temporary_database, valid_concept, cached_version,
+):
+    concept_id = _save_test_concept(valid_concept, "Stale connection translation")
+    canonical = service.build_empty_parameter_set()
+    canonical["connections"] = [{
+        "component_a": "base",
+        "component_b": "mast",
+        "connection_type": "Bolted",
+        "fastener_type": "M8 bolts",
+        "quantity": 4,
+        "note": "Secure the mast",
+    }]
+    database.save_engineering_parameter_set(concept_id, canonical, "en")
+    stale = copy.deepcopy(canonical)
+    stale["connections"][0]["note"] = "Закрепить мачту"
+    if cached_version is not None:
+        stale["_translation_contract_version"] = cached_version
+    database.save_engineering_parameter_translation(concept_id, "ru", stale)
+    calls = []
+
+    def translate(original, source_language, target_language):
+        calls.append((source_language, target_language))
+        result = copy.deepcopy(original)
+        result["connections"][0].update(
+            connection_type="Болтовое",
+            fastener_type="Болты M8",
+            note="Закрепить мачту",
+        )
+        return result
+
+    monkeypatch.setattr(
+        concept_translation_service, "translate_engineering_parameter_set", translate,
+    )
+    first = parameter_application.load_engineering_parameters_for_viewer(concept_id, "ru")
+    second = parameter_application.load_engineering_parameters_for_viewer(concept_id, "ru")
+    raw_cache = database.get_engineering_parameter_translation(concept_id, "ru")
+
+    assert calls == [("en", "ru")]
+    assert first == second
+    assert first["connections"][0]["connection_type"] == "Болтовое"
+    assert first["connections"][0]["fastener_type"] == "Болты M8"
+    assert first["connections"][0]["note"] == "Закрепить мачту"
+    assert first["connections"][0]["component_a"] == "base"
+    assert first["connections"][0]["component_b"] == "mast"
+    assert first["connections"][0]["quantity"] == 4
+    assert "_translation_contract_version" not in first
+    assert raw_cache["_translation_contract_version"] == 3
+    assert raw_cache["connections"][0]["connection_type"] == "Болтовое"
+    assert database.get_engineering_parameter_set(concept_id) == canonical
+    assert "_translation_contract_version" not in database.get_engineering_parameter_set(concept_id)
+
+
+def test_mixed_language_legacy_set_translates_viewer_connections_through_package(
+    monkeypatch, temporary_database, valid_concept,
+):
+    concept = copy.deepcopy(valid_concept)
+    concept["system_components"] = ["Wheeled platform", "Sensor mast"]
+    concept_id = _save_test_concept(concept, "Legacy mixed-language set")
+    canonical = service.build_empty_parameter_set()
+    _universal(canonical, "operating_environment")["value"] = "Наружная эксплуатация"
+    canonical["component_geometry"] = {
+        "wheeled_platform": {
+            "length": "400", "width": "300", "height": "100",
+            "x": "0", "y": "0", "z": "0", "unit": "mm",
+        },
+    }
+    canonical["connections"] = [{
+        "component_a": "wheeled_platform",
+        "component_b": "sensor_mast",
+        "connection_type": "mount",
+        "fastener_type": "M8 bolts",
+        "quantity": 4,
+        "note": "Securely attaches the mast to the platform.",
+    }]
+    database.save_engineering_parameter_set(concept_id, canonical, "ru")
+    calls = []
+
+    def translate(original, source_language, target_language):
+        calls.append((source_language, target_language))
+        result = copy.deepcopy(original)
+        result["connections"][0].update(
+            connection_type="крепление",
+            fastener_type="болты M8",
+            note="Надёжно крепит мачту к платформе.",
+        )
+        return result
+
+    monkeypatch.setattr(
+        concept_translation_service, "translate_engineering_parameter_set", translate,
+    )
+    viewer = parameter_application.load_engineering_parameters_for_viewer(concept_id, "ru")
+    cached_viewer = parameter_application.load_engineering_parameters_for_viewer(
+        concept_id, "ru"
+    )
+    viewer_connection = viewer["connections"][0]
+    arrangement = build_general_arrangement(concept, canonical)
+    names = drawing_studio_page._component_names(arrangement)
+    connection_markup = drawing_studio_page._connection_markup(
+        viewer_connection, names, "ru"
+    )
+    bom_rows = drawing_studio_page._build_bom_rows(
+        arrangement, concept, viewer["connections"]
+    )
+    package = drawing_studio_page._drawing_package_export_data(
+        concept, "robotics_automation", arrangement, viewer["connections"], "ru"
+    )
+    sections = {section["key"]: section for section in package["sections"]}
+    export_fields = dict(sections["connections_fasteners"]["connections"][0]["fields"])
+
+    assert calls == [("en", "ru")]
+    assert viewer == cached_viewer
+    assert _universal(viewer, "operating_environment")["value"] == "Наружная эксплуатация"
+    assert viewer_connection == {
+        **canonical["connections"][0],
+        "connection_type": "крепление",
+        "fastener_type": "болты M8",
+        "note": "Надёжно крепит мачту к платформе.",
+    }
+    assert viewer["component_geometry"] == canonical["component_geometry"]
+    assert "крепление" in connection_markup
+    assert "болты M8" in connection_markup
+    assert "Надёжно крепит мачту к платформе." in connection_markup
+    assert all("крепление" in row["connections"][0] for row in bom_rows)
+    assert all("болты M8" in row["connections"][0] for row in bom_rows)
+    assert all("Надёжно крепит мачту к платформе." in row["notes"] for row in bom_rows)
+    assert tuple(export_fields.values()) == (
+        "крепление", "болты M8", "4", "Надёжно крепит мачту к платформе."
+    )
+    assert sections["bill_of_materials"]["rows"] == bom_rows
+    assert database.get_engineering_parameter_set(concept_id) == canonical
+    assert database.get_engineering_parameter_set_source_language(concept_id) == "ru"
+    assert "_translation_contract_version" not in viewer
+    assert database.get_engineering_parameter_translation(concept_id, "ru")[
+        "_translation_contract_version"
+    ] == 3
 
 
 def test_structured_translation_changes_only_display_fields(monkeypatch):
     parameter_set = service.build_empty_parameter_set()
+    parameter_set["connections"] = [{
+        "component_a": "base",
+        "component_b": "mast",
+        "connection_type": "mount",
+        "fastener_type": "M8 bolts",
+        "quantity": 4,
+        "note": "Securely attaches the mast to the platform.",
+    }]
     core_text = _universal(parameter_set, "operating_environment")
     core_text.update(
         {
@@ -1450,6 +1960,11 @@ def test_structured_translation_changes_only_display_fields(monkeypatch):
                 parameter["unit_text"] = "метры"
             if parameter["rationale"] is not None:
                 parameter["rationale"] = "Переведённое обоснование"
+        translated["connections"][0].update(
+            connection_type="крепление",
+            fastener_type="болты M8",
+            note="Надёжно крепит мачту к платформе.",
+        )
         return SimpleNamespace(
             choices=[
                 SimpleNamespace(
@@ -1469,6 +1984,7 @@ def test_structured_translation_changes_only_display_fields(monkeypatch):
     )
     monkeypatch.setattr(concept_translation_service, "get_text_client", lambda: client)
 
+    canonical_snapshot = copy.deepcopy(parameter_set)
     translated = concept_translation_service.translate_engineering_parameter_set(
         parameter_set,
         "en",
@@ -1476,7 +1992,24 @@ def test_structured_translation_changes_only_display_fields(monkeypatch):
     )
 
     assert len(calls) == 1
+    system_prompt = calls[0]["messages"][0]["content"]
+    assert "connection_type, fastener_type, and note are user-facing" in system_prompt
+    assert "mount" in system_prompt
+    assert "screw/screws" in system_prompt
+    assert "ordinary word while preserving M8 exactly" in system_prompt
     request_payload = json.loads(calls[0]["messages"][-1]["content"])
+    assert request_payload["connections"][0] == parameter_set["connections"][0]
+    assert translated["connections"][0] == {
+        **parameter_set["connections"][0],
+        "connection_type": "крепление",
+        "fastener_type": "болты M8",
+        "note": "Надёжно крепит мачту к платформе.",
+    }
+    assert translated["connections"][0]["component_a"] == "base"
+    assert translated["connections"][0]["component_b"] == "mast"
+    assert translated["connections"][0]["quantity"] == 4
+    assert parameter_set["connections"][0]["fastener_type"] == "M8 bolts"
+    assert parameter_set == canonical_snapshot
     requested_project_units = {
         parameter["key"]: parameter["unit_text"]
         for parameter in request_payload["project_specific"]

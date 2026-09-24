@@ -134,6 +134,17 @@ def translate_engineering_parameter_set(
         ]
         for group_name in ("universal", "project_specific")
     }
+    payload["connections"] = [
+        {
+            "component_a": connection["component_a"],
+            "component_b": connection["component_b"],
+            "connection_type": connection["connection_type"],
+            "fastener_type": connection["fastener_type"],
+            "quantity": connection["quantity"],
+            "note": connection["note"],
+        }
+        for connection in original["connections"]
+    ]
     translated = _translate_structured_text(
         payload,
         source_language,
@@ -145,6 +156,20 @@ def translate_engineering_parameter_set(
             "unit_text is ordinary natural-language text and must be translated.",
             "Preserve technical unit symbols such as m, mm, cm, kg, %, Wh, W, "
             "kW, N, kN, V, A, and °C exactly.",
+            "In connections, preserve component_a, component_b, and quantity exactly.",
+            "connection_type, fastener_type, and note are user-facing natural-"
+            "language fields. Translate ordinary engineering words and phrases "
+            "in all three fields, including short single words such as mount, "
+            "bolt/bolts, screw/screws, adhesive, integration, bracket, clamp, "
+            "welded connection, and mechanical mount. Engineering context alone "
+            "does not make an ordinary word a technical identifier.",
+            "Preserve technical identifiers, codes, and measurements inside "
+            "these fields, such as M8, M10, M12, ISO 9001, DIN 933, IP67, "
+            "24 V, 100 mm, and 5 kN. In a phrase like M8 bolts, translate the "
+            "ordinary word while preserving M8 exactly.",
+            "Legacy engineering display text may mix project languages. Ensure all "
+            "human-facing natural-language strings are in the target language, "
+            "while preserving strings already correctly written in that language.",
         ),
     )
 
@@ -167,4 +192,16 @@ def translate_engineering_parameter_set(
                 target["unit"] = translated_field["unit_text"]
             if source["rationale"] is not None:
                 target["rationale"] = translated_field["rationale"]
+    for source, target, translated_connection in zip(
+        original["connections"],
+        display["connections"],
+        translated["connections"],
+    ):
+        if any(
+            translated_connection[field] != source[field]
+            for field in ("component_a", "component_b", "quantity")
+        ):
+            raise ValueError("Translation changed engineering connection identity")
+        for field in ("connection_type", "fastener_type", "note"):
+            target[field] = translated_connection[field]
     return validate_parameter_set(display)

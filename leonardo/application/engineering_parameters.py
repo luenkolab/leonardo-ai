@@ -3,13 +3,14 @@ from threading import Lock
 from application.concepts import load_concept
 from application.images import MODERN_CONCEPT_IMAGE_TYPES, get_concept_image_slots
 from database import (
+    get_concept_language,
     get_engineering_parameter_set,
     get_engineering_parameter_set_source_language,
     get_engineering_parameter_translation,
     save_engineering_parameter_set,
     save_engineering_parameter_translation,
 )
-from i18n import normalize_language
+from i18n import DEFAULT_LANGUAGE, normalize_language
 from services import concept_translation_service
 from services.engineering_parameters_service import (
     build_empty_parameter_set,
@@ -27,6 +28,7 @@ from services.general_arrangement_service import (
 
 
 _TRANSLATION_LOCK = Lock()
+_TRANSLATION_CONTRACT_VERSION = 3
 
 
 def load_engineering_parameters_for_viewer(concept_id, viewer_language):
@@ -35,30 +37,44 @@ def load_engineering_parameters_for_viewer(concept_id, viewer_language):
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
     source_language = get_engineering_parameter_set_source_language(concept_id)
+    concept_source_language = get_concept_language(concept_id)
     target_language = normalize_language(viewer_language)
+    legacy_mixed_language = (
+        concept_source_language is not None
+        and source_language != concept_source_language
+    )
     if (
         source_language is None
-        or target_language == source_language
+        or (target_language == source_language and not legacy_mixed_language)
     ):
         return original
 
     cached = get_engineering_parameter_translation(concept_id, target_language)
-    if cached is not None:
+    if (
+        cached is not None
+        and cached.get("_translation_contract_version") == _TRANSLATION_CONTRACT_VERSION
+    ):
         return validate_parameter_set(cached)
 
     with _TRANSLATION_LOCK:
         cached = get_engineering_parameter_translation(concept_id, target_language)
-        if cached is not None:
+        if (
+            cached is not None
+            and cached.get("_translation_contract_version") == _TRANSLATION_CONTRACT_VERSION
+        ):
             return validate_parameter_set(cached)
         translated = concept_translation_service.translate_engineering_parameter_set(
             original,
-            source_language,
+            concept_source_language if legacy_mixed_language else source_language,
             target_language,
         )
         save_engineering_parameter_translation(
             concept_id,
             target_language,
-            translated,
+            {
+                **translated,
+                "_translation_contract_version": _TRANSLATION_CONTRACT_VERSION,
+            },
         )
         return translated
 
@@ -103,6 +119,9 @@ def run_ai_engineer(
     language,
 ):
     """Complete missing engineering data and save it in the existing contract."""
+    source_language = normalize_language(
+        get_concept_language(concept_id) or DEFAULT_LANGUAGE
+    )
     current = validate_parameter_set(
         get_engineering_parameter_set(concept_id) or build_empty_parameter_set()
     )
@@ -117,7 +136,7 @@ def run_ai_engineer(
         concept_data,
         category,
         original_prompt,
-        language,
+        source_language,
         current,
         components,
         modern_images,
@@ -130,7 +149,7 @@ def run_ai_engineer(
     save_engineering_parameter_set(
         concept_id,
         merged,
-        source_language=normalize_language(language),
+        source_language=source_language,
     )
     return merged
 

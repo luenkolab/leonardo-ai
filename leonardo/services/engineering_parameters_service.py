@@ -9,7 +9,7 @@ from services.general_arrangement_service import PrimitiveType
 from services.openai_client import get_text_client
 
 
-ENGINEERING_PARAMETERS_MODEL = "gpt-4o-mini"
+ENGINEERING_PARAMETERS_MODEL = "gpt-5.6-sol"
 PARAMETER_STATUSES = {
     "missing",
     "suggested",
@@ -297,7 +297,7 @@ def validate_parameter_set(value):
         )
     return {
         "universal": _deduplicate_parameters(universal, "user"),
-        "project_specific": _deduplicate_parameters(project_specific, "ai"),
+        "project_specific": _deduplicate_parameters(project_specific, "user"),
         "component_geometry": component_geometry,
         "connections": connections,
     }
@@ -341,7 +341,7 @@ def suggest_engineering_data(
     components,
     modern_images=(),
 ):
-    """Make one shared-client call for all missing engineering data."""
+    """Make one shared-client call for current engineering data."""
     current = validate_parameter_set(parameter_set)
     component_context = [
         {"key": component.key, "name": component.name} for component in components
@@ -350,14 +350,137 @@ def suggest_engineering_data(
         "category": category,
         "original_prompt": original_prompt,
         "concept_data": concept_data,
-        "engineering_parameters": current,
+        "engineering_parameters": {
+            **current,
+            "component_geometry": {
+                key: geometry
+                for key, geometry in current["component_geometry"].items()
+                if geometry.get("source") != "ai"
+            },
+        },
         "components": component_context,
+    }
+    required_geometry_keys = {
+        component["key"] for component in component_context
+    } - set(context["engineering_parameters"]["component_geometry"])
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "universal": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+            "project_specific": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+            "component_geometry": {
+                "type": "object",
+                "properties": {
+                    key: {"$ref": "#/$defs/geometry"}
+                    for key in sorted(required_geometry_keys)
+                },
+                "required": sorted(required_geometry_keys),
+                "additionalProperties": False,
+            },
+            "connections": {"type": "array", "items": {"$ref": "#/$defs/connection"}},
+        },
+        "required": ["universal", "project_specific", "component_geometry", "connections"],
+        "additionalProperties": False,
+        "$defs": {
+            "parameter": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "label": {"type": "string"},
+                    "value": {"type": ["string", "null"]},
+                    "unit": {"type": ["string", "null"]},
+                    "status": {"type": "string", "enum": ["missing", "suggested"]},
+                    "source": {"type": "string", "enum": ["ai"]},
+                    "rationale": {"type": ["string", "null"]},
+                },
+                "required": ["key", "label", "value", "unit", "status", "source", "rationale"],
+                "additionalProperties": False,
+            },
+            "position": {
+                "type": "object",
+                "properties": {axis: {"type": "number"} for axis in ("x", "y", "z")},
+                "required": ["x", "y", "z"],
+                "additionalProperties": False,
+            },
+            "orientation": {
+                "type": "object",
+                "properties": {
+                    axis: {"type": "number"} for axis in ("roll", "pitch", "yaw")
+                },
+                "required": ["roll", "pitch", "yaw"],
+                "additionalProperties": False,
+            },
+            "geometry": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "enum": ["ai"]},
+                    "primitive": {"type": "string", "enum": list(get_args(PrimitiveType))},
+                    "length": {"type": "number"},
+                    "width": {"type": "number"},
+                    "height": {"type": "number"},
+                    "wall_thickness": {"type": ["number", "null"]},
+                    "unit": {"type": "string", "enum": sorted(COMPONENT_GEOMETRY_UNITS)},
+                    "position": {"$ref": "#/$defs/position"},
+                    "orientation": {"$ref": "#/$defs/orientation"},
+                    "features": {"type": "array", "items": {"type": "string"}},
+                    "subgeometry": {
+                        "type": "array", "items": {"$ref": "#/$defs/subgeometry"}
+                    },
+                },
+                "required": [
+                    "source", "primitive", "length", "width", "height",
+                    "wall_thickness", "unit", "position", "orientation",
+                    "features", "subgeometry",
+                ],
+                "additionalProperties": False,
+            },
+            "subgeometry": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "role": {"type": ["string", "null"]},
+                    "primitive": {"type": "string", "enum": list(get_args(PrimitiveType))},
+                    "length": {"type": ["number", "null"]},
+                    "width": {"type": ["number", "null"]},
+                    "height": {"type": ["number", "null"]},
+                    "diameter": {"type": ["number", "null"]},
+                    "wall_thickness": {"type": ["number", "null"]},
+                    "unit": {"type": "string", "enum": sorted(COMPONENT_GEOMETRY_UNITS)},
+                    "position": {"$ref": "#/$defs/position"},
+                    "orientation": {"$ref": "#/$defs/orientation"},
+                    "features": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": [
+                    "key", "role", "primitive", "length", "width", "height",
+                    "diameter", "wall_thickness", "unit", "position",
+                    "orientation", "features",
+                ],
+                "additionalProperties": False,
+            },
+            "connection": {
+                "type": "object",
+                "properties": {
+                    "component_a": {"type": "string"},
+                    "component_b": {"type": "string"},
+                    "connection_type": {"type": "string"},
+                    "fastener_type": {"type": ["string", "null"]},
+                    "quantity": {"type": ["integer", "null"]},
+                    "note": {"type": ["string", "null"]},
+                },
+                "required": [
+                    "component_a", "component_b", "connection_type",
+                    "fastener_type", "quantity", "note",
+                ],
+                "additionalProperties": False,
+            },
+        },
     }
     system_prompt = f"""
 You are the AI Engineer for a physical-product concept. Work in this exact order:
-1. Complete only missing Universal Core engineering parameters.
-2. Generate project-specific parameters using the completed Core context.
-3. Generate or refine AI-sourced component geometry fields.
+1. Fill missing Universal Core values and refine existing AI-sourced Core
+   assumptions when the current engineering model requires it.
+2. Generate project-specific engineering characteristics using the Core context.
+3. Generate complete replacement records for AI-sourced component geometry.
 4. Add only missing connections between supplied stable component keys.
 
 Return exactly one JSON object with these existing contract keys:
@@ -367,26 +490,52 @@ rationale. Component geometry fields are source, primitive, length, width, heigh
 wall_thickness, unit, position, orientation, features, and optional subgeometry.
 Each subgeometry item uses key, role, an existing supported primitive, optional
 length, width, height, diameter, wall_thickness, unit, parent-relative position,
-and orientation. Position uses optional
-x, y, z values for the component's minimum corner, measured from the overall
-envelope origin (0, 0, 0). Orientation uses optional roll, pitch, yaw angles in
-degrees. Features is an array of concise structural-form strings.
+and orientation. World axes are X = longitudinal / overall length,
+Y = transverse / overall width, and Z = vertical / overall height.
+Parent position.x/y/z is the component's minimum corner relative to the overall
+assembly/envelope origin (0, 0, 0); subgeometry position.x/y/z is relative to its parent
+minimum corner, using the same world-axis directions. Orientation uses optional
+roll, pitch, yaw angles in degrees. Features is descriptive engineering metadata,
+not renderable geometry.
 Connection fields are component_a, component_b, connection_type, fastener_type,
 quantity, note.
 
 Rules:
 - Write labels and rationale in {ai_language_name(language)}.
-- Never replace user-sourced, concept-sourced, or otherwise protected non-AI Core
-  values. Existing AI-sourced Core assumptions may be regenerated or refined when
-  new engineering or visual evidence requires it.
-- Never replace user-sourced component geometry.
-  AI-sourced component geometry may be regenerated or refined.
+- Never replace existing user-sourced, concept-sourced, or legacy Core values.
+  Fill missing Core values. Existing AI-sourced Core assumptions may be revised,
+  recalculated, or explicitly cleared with null when no longer supported by the
+  current engineering model; do not preserve obsolete AI assumptions indefinitely.
+- Never replace user-sourced or legacy component geometry. A returned geometry
+  record for an AI-owned component is its complete current record, not a partial
+  patch: omit obsolete fields and subgeometry instead of carrying them forward.
+  Previous AI component geometry is omitted from the request because it is a stale
+  assumption, not evidence. Do not copy previous AI geometry by default. Re-derive
+  AI-owned geometry from canonical ConceptData, protected engineering constraints,
+  project function, modern visual references, and engineering reasoning.
+- COMPONENT_GEOMETRY IS REQUIRED OUTPUT. Always return a component_geometry object.
+  Required AI geometry keys for this request: {json.dumps(sorted(required_geometry_keys))}.
+  Return exactly one complete source="ai" component_geometry record for every
+  required key, and no replacement records for protected geometry. Do not omit
+  required components or return an empty object when required keys are present.
+  Each required record must include a supported primitive, physical dimensions and
+  unit, position, orientation, features, and subgeometry when structurally needed.
 - For each supplied component, infer a primitive and only support these values:
   box, beam, plate, tube, cylinder, shaft, frame, panel, shell, truss, custom.
-  Use features for approximate structural form/topology, and connections for
-  component relationships. Use box when no more specific form is supported.
+  Use box when no more specific form is supported. Features describe engineering
+  properties but are not drawn. Any physical part needed to show recognizable
+  structural form must be represented by the parent primitive or by supported
+  subgeometry, not merely named in features. Add meaningful visible or structural
+  parts when one primitive cannot convey the component's topology. If the visible
+  product topology contains multiple significant structural parts needed to recognize
+  a component, return those parts as subgeometry rather than only features text;
+  avoid decorative or microscopic detail.
 - Rebuild project_specific for the current context on every run. Recalculate records
-  whose current source is "ai"; do not replace records with a non-AI source.
+  whose current source is "ai"; do not replace user, concept, or legacy records.
+  Select actual project-specific engineering characteristics such as capacities,
+  operating limits, deployment states, range, duration, speed, or throughput when
+  relevant to this concept. Do not duplicate individual component dimensions from
+  component_geometry as Project-Specific Parameters.
 - Keep existing connections and add only genuinely missing component pairs.
 - source must be "ai" for parameter records. AI suggestions are preliminary and
   are not verified engineering truth.
@@ -397,24 +546,44 @@ Rules:
 - No image pixels or visual proportions are available as authoritative dimensions.
   Modern reference images may inform only visible component identity, structural
   form, topology, relative placement, visible subcomponents/features, and
-  approximate orientation. Never derive or claim verified engineering dimensions
+  approximate orientation. Images are references for topology, recognizable form,
+  the number of visible major elements, spatial arrangement, and placement only.
+  For these visual properties they outweigh previous AI geometry assumptions, but
+  they are not verified dimensional sources. Never derive or claim verified engineering dimensions
   from image pixels or visual scale. Numeric dimensions must come from existing
   user values, Core or Project-Specific Parameters, or explicit preliminary AI
   engineering assumptions when data is missing.
 - Overall Dimensions / Envelope, when proposed, must be labelled axes in the form
   "length=<number>; width=<number>; height=<number>" with one of mm, cm, or m.
-- Component geometry may reference only the supplied stable component keys. Use the
-  existing component unit when a partial geometry record already has one.
-- Position and dimensions for a component must use the same unit. When the overall
-  envelope axes and required component fields are known, require x + length <=
+- Component geometry may reference only the supplied stable component keys.
+  Keep protected geometry unchanged; choose a consistent unit in each complete
+  replacement record for AI-owned geometry.
+- Infer each component's physical main axis and orient its geometry accordingly in
+  the existing world axes. A vertical column or mast must extend mainly along Z
+  after orientation; a longitudinal member along X and a transverse member along Y.
+  Prefer world-aligned dimensions, such as height for a vertical part, when they
+  express the physical form directly. Use supported orientation only when needed;
+  do not rely on a renderer transform to repair semantically incorrect dimensions.
+- Before returning each component's final record, internally check its dominant
+  physical axis, visible parts requiring subgeometry, physical placement, consistency
+  with protected overall constraints, and whether it was independently derived
+  rather than copied from a previous AI assumption. Return only the corrected
+  structured result, not the reasoning.
+- Position and dimensions for a component must use the same unit. Check overall
+  envelope against component dimensions, positions, orientation, and subgeometry
+  extents. For world-aligned components with known fields, require x + length <=
   envelope length, y + width <= envelope width, and z + height <= envelope height.
-  If a component intentionally extends outside the stated envelope, do not silently
-  move or resize it to fit; leave the contradictory geometry assumption unresolved.
+  If an AI-sourced envelope conflicts with the physical design, revise that AI
+  assumption rather than silently shrinking, clamping, moving, or resizing parts.
+  Preserve protected envelope values. An intentional deployed/extended geometry
+  may exceed a stowed/transport envelope only when existing engineering parameters
+  clearly distinguish those states; do not leave an accidental contradiction.
 - Dimensions and wall_thickness must be positive numbers. Position coordinates may
   be zero or positive. Orientation angles may be positive, zero, or negative.
-- Use structured subgeometry only for justified visible or conceptual structural
-  features, never decorative complexity. Subgeometry positions are relative to the
-  parent component's minimum corner and use the same unit as the parent. For
+- Use structured subgeometry for visually or structurally important parts when one
+  primitive is insufficient for recognizable engineering topology, never decorative
+  complexity. Subgeometry positions are relative to the parent minimum corner and
+  use the same unit and world-axis directions as the parent. For
   renderable orthographic geometry, use axis-aligned orientations in 90-degree
   increments; do not imply a full CAD transform.
 - Connections may reference only two different supplied component keys. Quantity is
@@ -423,6 +592,13 @@ Rules:
   performance, geometry, or connections. Use null when a reasonable preliminary
   value cannot be supported by the structured project context.
 - Do not return extra top-level keys.
+
+Before returning the structured result, check: X is longitudinal, Y transverse,
+Z vertical; each installed component's dominant final extent follows its physical
+axis (a vertical mast uses height/Z unless orientation actually rotates it to Z);
+visible structural parts needed for recognition are subgeometry, not features text;
+reference images guide topology, orientation, arrangement, and visible structure,
+never verified dimensions; every required key has one complete replacement record.
 """
     user_content = json.dumps(context, ensure_ascii=False)
     if modern_images:
@@ -442,8 +618,14 @@ Rules:
         ]
     response = get_text_client().chat.completions.create(
         model=ENGINEERING_PARAMETERS_MODEL,
-        temperature=0.1,
-        response_format={"type": "json_object"},
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": "engineering_parameter_set",
+                "strict": True,
+                "schema": response_schema,
+            },
+        },
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
@@ -455,16 +637,17 @@ Rules:
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("AI Engineer response must be a JSON object")
-    component_geometry = payload.get("component_geometry", {})
-    if isinstance(component_geometry, dict):
-        component_geometry = {
-            key: (
-                {**geometry, "source": "ai"}
-                if isinstance(geometry, dict)
-                else geometry
-            )
-            for key, geometry in component_geometry.items()
-        }
+    component_geometry = payload.get("component_geometry")
+    if not isinstance(component_geometry, dict):
+        raise ValueError("AI Engineer response requires component_geometry object")
+    component_geometry = {
+        key: (
+            {**geometry, "source": "ai"}
+            if isinstance(geometry, dict)
+            else geometry
+        )
+        for key, geometry in component_geometry.items()
+    }
     normalized = validate_parameter_set(
         {
             "universal": _ai_parameters(payload.get("universal", []), True),
@@ -475,6 +658,30 @@ Rules:
             "connections": payload.get("connections", []),
         }
     )
+    returned_geometry_keys = set(normalized["component_geometry"])
+    if returned_geometry_keys != required_geometry_keys:
+        raise ValueError(
+            "AI Engineer response has incomplete component_geometry "
+            f"(missing={sorted(required_geometry_keys - returned_geometry_keys)}, "
+            f"unexpected={sorted(returned_geometry_keys - required_geometry_keys)})"
+        )
+    for key in required_geometry_keys:
+        geometry = normalized["component_geometry"][key]
+        if (
+            geometry.get("source") != "ai"
+            or not geometry.get("primitive")
+            or any(geometry.get(field) is None for field in (
+                "length", "width", "height", "unit",
+            ))
+            or any((geometry.get("position") or {}).get(axis) is None
+                   for axis in ("x", "y", "z"))
+            or any((geometry.get("orientation") or {}).get(axis) is None
+                   for axis in ("roll", "pitch", "yaw"))
+            or "features" not in geometry
+        ):
+            raise ValueError(
+                f"AI Engineer response has incomplete component_geometry record for {key}"
+            )
     return normalized
 
 
@@ -485,23 +692,29 @@ def merge_ai_engineering_data(parameter_set, suggestions, valid_component_keys):
     incoming_universal = {item["key"]: item for item in incoming["universal"]}
     for parameter in current["universal"]:
         suggestion = incoming_universal.get(parameter["key"])
-        if (
-            (parameter["value"] is not None and parameter["source"] != "ai")
-            or not suggestion
-            or suggestion["value"] is None
+        if not suggestion or (
+            parameter["value"] is not None and parameter["source"] != "ai"
         ):
             continue
         if (
-            parameter["unit"]
+            parameter["source"] != "ai"
+            and suggestion["value"] is not None
+            and parameter["unit"]
             and suggestion["unit"]
             and parameter["unit"].casefold() != suggestion["unit"].casefold()
         ):
             continue
+        if suggestion["value"] is None and parameter["source"] != "ai":
+            continue
         parameter.update(
             {
                 "value": suggestion["value"],
-                "unit": parameter["unit"] or suggestion["unit"],
-                "status": "suggested",
+                "unit": (
+                    suggestion["unit"]
+                    if parameter["source"] == "ai"
+                    else parameter["unit"] or suggestion["unit"]
+                ),
+                "status": "missing" if suggestion["value"] is None else "suggested",
                 "source": "ai",
                 "rationale": suggestion["rationale"],
             }
