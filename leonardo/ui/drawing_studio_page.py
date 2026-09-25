@@ -461,6 +461,8 @@ def _primitive_shape_markup(
     height,
     view_key,
     wall_thickness=None,
+    view_axes=None,
+    longitudinal_axis="length",
 ):
     key_attribute = f'data-component-key="{html.escape(component_key)}" '
     common = (
@@ -485,8 +487,19 @@ def _primitive_shape_markup(
     inner_width = max(0.0, width - 2 * inset)
     inner_height = max(0.0, height - 2 * inset)
     line_style = 'stroke="#277da1" stroke-width="1" fill="none"'
+    _, vertical_view_axis, view_normal_axis = view_axes or (None, None, None)
 
     if primitive == "beam":
+        if view_normal_axis == "length":
+            return rectangle
+        if vertical_view_axis == "length":
+            return (
+                rectangle
+                + f'<line x1="{x + width * 0.22:.2f}" y1="{y:.2f}" '
+                f'x2="{x + width * 0.22:.2f}" y2="{bottom:.2f}" {line_style}/>'
+                + f'<line x1="{x + width * 0.78:.2f}" y1="{y:.2f}" '
+                f'x2="{x + width * 0.78:.2f}" y2="{bottom:.2f}" {line_style}/>'
+            )
         return (
             rectangle
             + f'<line x1="{x:.2f}" y1="{y + height * 0.22:.2f}" '
@@ -495,6 +508,8 @@ def _primitive_shape_markup(
             f'x2="{right:.2f}" y2="{y + height * 0.78:.2f}" {line_style}/>'
         )
     if primitive in {"plate", "panel"}:
+        if view_normal_axis != "height":
+            return rectangle
         lines = (
             f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
             f'y2="{center_y:.2f}" {line_style}/>'
@@ -505,7 +520,38 @@ def _primitive_shape_markup(
                 f'y2="{bottom:.2f}" {line_style}/>'
             )
         return rectangle + lines
-    if primitive in {"tube", "frame"}:
+    if primitive == "tube":
+        if view_normal_axis == "length":
+            if inner_width < 2 or inner_height < 2:
+                return rectangle
+            return (
+                rectangle
+                + f'<rect x="{x + inset:.2f}" y="{y + inset:.2f}" '
+                f'width="{inner_width:.2f}" height="{inner_height:.2f}" '
+                'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="1"/>'
+            )
+        if vertical_view_axis == "length":
+            if inner_width < 2:
+                return rectangle
+            return (
+                rectangle
+                + f'<line x1="{x + inset:.2f}" y1="{y:.2f}" '
+                f'x2="{x + inset:.2f}" y2="{bottom:.2f}" {line_style}/>'
+                + f'<line x1="{right - inset:.2f}" y1="{y:.2f}" '
+                f'x2="{right - inset:.2f}" y2="{bottom:.2f}" {line_style}/>'
+            )
+        if inner_height < 2:
+            return rectangle
+        return (
+            rectangle
+            + f'<line x1="{x:.2f}" y1="{y + inset:.2f}" '
+            f'x2="{right:.2f}" y2="{y + inset:.2f}" {line_style}/>'
+            + f'<line x1="{x:.2f}" y1="{bottom - inset:.2f}" '
+            f'x2="{right:.2f}" y2="{bottom - inset:.2f}" {line_style}/>'
+        )
+    if primitive == "frame":
+        if view_normal_axis != "height" or inner_width < 2 or inner_height < 2:
+            return rectangle
         return (
             rectangle
             + f'<rect x="{x + inset:.2f}" y="{y + inset:.2f}" '
@@ -513,20 +559,29 @@ def _primitive_shape_markup(
             'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="1"/>'
         )
     if primitive in {"cylinder", "shaft"}:
-        if abs(width - height) < 0.01:
+        if view_normal_axis == longitudinal_axis:
             return (
                 f'<ellipse {common} cx="{center_x:.2f}" cy="{center_y:.2f}" '
                 f'rx="{width / 2:.2f}" ry="{height / 2:.2f}"/>'
             )
-        radius = min(height / 2, width / 4)
-        return (
-            f'<rect {common} x="{x:.2f}" y="{y:.2f}" width="{width:.2f}" '
-            f'height="{height:.2f}" rx="{radius:.2f}"/>'
-            + f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
+        radius = min(width, height) / 2
+        center_line = (
+            f'<line x1="{center_x:.2f}" y1="{y:.2f}" x2="{center_x:.2f}" '
+            f'y2="{bottom:.2f}" stroke="#277da1" stroke-width="0.8" '
+            'stroke-dasharray="4 3"/>'
+            if vertical_view_axis == longitudinal_axis
+            else f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
             f'y2="{center_y:.2f}" stroke="#277da1" stroke-width="0.8" '
             'stroke-dasharray="4 3"/>'
         )
+        return (
+            f'<rect {common} x="{x:.2f}" y="{y:.2f}" width="{width:.2f}" '
+            f'height="{height:.2f}" rx="{radius:.2f}"/>'
+            + center_line
+        )
     if primitive == "shell":
+        if view_normal_axis != "width":
+            return rectangle
         return (
             f'<path {key_attribute}data-primitive="shell" '
             f'd="M{x:.2f},{bottom:.2f} Q{center_x:.2f},{y:.2f} '
@@ -534,6 +589,8 @@ def _primitive_shape_markup(
             'stroke="#277da1" stroke-width="1.2"/>'
         )
     if primitive == "truss":
+        if view_normal_axis != "width" or min(width, height) < 6:
+            return rectangle
         return (
             rectangle
             + f'<line x1="{x:.2f}" y1="{y:.2f}" x2="{right:.2f}" '
@@ -563,12 +620,15 @@ def _general_arrangement_view_markup(
 
     area_x, area_y = 65.0, 30.0
     area_width, area_height = 220.0, 130.0
+    display_x = area_x + (area_width - float(display.width)) / 2
+    display_y = area_y + (area_height - float(display.height)) / 2
     rectangle_width = float(view.horizontal.value * display.scale)
     rectangle_height = float(view.vertical.value * display.scale)
-    rectangle_x = area_x + (area_width - float(display.width)) / 2
+    rectangle_x = display_x + float(-display.horizontal_min * display.scale)
     rectangle_y = (
-        area_y + (area_height - float(display.height)) / 2
-        + float(display.height) - rectangle_height
+        display_y
+        + float(display.height)
+        - float((view.vertical.value - display.vertical_min) * display.scale)
     )
     horizontal_y = rectangle_y + rectangle_height + 28
     vertical_x = rectangle_x - 28
@@ -580,13 +640,15 @@ def _general_arrangement_view_markup(
     for projection in component_projections:
         component_width = float(projection.horizontal_size.value * display.scale)
         component_height = float(projection.vertical_size.value * display.scale)
-        component_x = rectangle_x + float(
-            projection.horizontal_position.value * display.scale
+        component_x = display_x + float(
+            (projection.horizontal_position.value - display.horizontal_min)
+            * display.scale
         )
-        component_y = rectangle_y + rectangle_height - float(
+        component_y = display_y + float(display.height) - float(
             (
                 projection.vertical_position.value
                 + projection.vertical_size.value
+                - display.vertical_min
             )
             * display.scale
         )
@@ -605,6 +667,8 @@ def _general_arrangement_view_markup(
                 component_height,
                 view.key,
                 wall_thickness,
+                projection.view_axes,
+                projection.longitudinal_axis,
             )
         )
         item_number = assembly_item_numbers.get(projection.component_key)

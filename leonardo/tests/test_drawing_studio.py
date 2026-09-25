@@ -594,6 +594,86 @@ def _component_geometry(**overrides):
     return geometry
 
 
+def _primitive_markup(primitive, view_axes, longitudinal_axis="length"):
+    return drawing_studio_page._primitive_shape_markup(
+        primitive,
+        "part",
+        10,
+        20,
+        80,
+        40,
+        "top",
+        5,
+        view_axes,
+        longitudinal_axis,
+    )
+
+
+def test_axial_primitives_render_end_and_longitudinal_views_differently():
+    end_view = ("width", "height", "length")
+    side_view = ("length", "height", "width")
+
+    for primitive in ("cylinder", "shaft"):
+        end_markup = _primitive_markup(primitive, end_view)
+        side_markup = _primitive_markup(primitive, side_view)
+        assert "<ellipse " in end_markup
+        assert "<ellipse " not in side_markup
+        assert "stroke-dasharray" in side_markup
+
+        height_axis_end = _primitive_markup(
+            primitive, ("length", "width", "height"), "height"
+        )
+        height_axis_side = _primitive_markup(
+            primitive, ("height", "width", "length"), "height"
+        )
+        assert "<ellipse " in height_axis_end
+        assert "<ellipse " not in height_axis_side
+
+    tube_end = _primitive_markup("tube", end_view)
+    tube_side = _primitive_markup("tube", side_view)
+    assert tube_end.count("<rect ") == 2
+    assert "<line " not in tube_end
+    assert tube_side.count("<rect ") == 1
+    assert tube_side.count("<line ") == 2
+
+    beam_end = _primitive_markup("beam", end_view)
+    beam_side = _primitive_markup("beam", side_view)
+    assert "<line " not in beam_end
+    assert beam_side.count("<line ") == 2
+
+
+def test_planar_primitives_render_face_and_edge_views_differently():
+    face_view = ("length", "width", "height")
+    edge_view = ("length", "height", "width")
+
+    assert _primitive_markup("plate", face_view).count("<line ") == 1
+    assert "<line " not in _primitive_markup("plate", edge_view)
+    assert _primitive_markup("panel", face_view).count("<line ") == 2
+    assert "<line " not in _primitive_markup("panel", edge_view)
+    assert _primitive_markup("frame", face_view).count("<rect ") == 2
+    assert _primitive_markup("frame", edge_view).count("<rect ") == 1
+
+    truss_face = _primitive_markup("truss", edge_view)
+    truss_edge = _primitive_markup("truss", face_view)
+    assert truss_face.count("<line ") == 2
+    assert "<line " not in truss_edge
+
+    shell_profile = _primitive_markup("shell", edge_view)
+    shell_edge = _primitive_markup("shell", face_view)
+    assert "<path " in shell_profile
+    assert "<path " not in shell_edge
+
+
+def test_view_invariant_primitive_fallbacks_remain_unchanged():
+    top_view = ("length", "width", "height")
+    front_view = ("width", "height", "length")
+
+    assert _primitive_markup("box", top_view) == _primitive_markup("box", front_view)
+    custom_top = _primitive_markup("custom", top_view)
+    assert custom_top == _primitive_markup("custom", front_view)
+    assert 'stroke-dasharray="5 3"' in custom_top
+
+
 def test_svg_renderer_uses_legacy_box_fallback_and_distinct_primitives():
     legacy = _orthographic_arrangement({"part": _component_geometry()})
     beam = _orthographic_arrangement(
@@ -637,7 +717,7 @@ def test_svg_renderer_uses_legacy_box_fallback_and_distinct_primitives():
     assert 'data-primitive="beam"' in beam_top
     assert beam_top.count("<line ") > legacy_top.count("<line ")
     assert 'data-primitive="tube"' in tube_top
-    assert tube_top.count("<rect ") > legacy_top.count("<rect ")
+    assert tube_top.count("<line ") > legacy_top.count("<line ")
     assert 'data-primitive="cylinder"' in cylinder_front
     assert "<ellipse " in cylinder_front
 
@@ -691,6 +771,74 @@ def test_svg_renderer_reuses_primitive_renderer_for_parent_relative_subgeometry(
         ),
     )
     assert 'data-component-key="part.left_wheel"' in detail_markup
+
+
+def test_rotated_subgeometry_renderer_uses_composed_view_orientation():
+    arrangement = _orthographic_arrangement(
+        {
+            "part": _component_geometry(
+                orientation={"roll": "90", "pitch": "0", "yaw": "0"},
+                subgeometry=[
+                    {
+                        "key": "pin",
+                        "primitive": "shaft",
+                        "length": "80",
+                        "width": "40",
+                        "height": "40",
+                        "unit": "mm",
+                        "position": {"x": "100", "y": "0", "z": "0"},
+                        "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+                    }
+                ],
+            )
+        }
+    )
+    top = drawing_studio_page.build_envelope_views(arrangement)[0]
+    projections = drawing_studio_page.build_component_projections(arrangement, top)
+
+    assert projections[1].view_axes[2] == "length"
+    assert projections[1].longitudinal_axis == "length"
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        top,
+        "Top View",
+        "Missing geometry",
+        projections,
+    )
+    assert 'data-component-key="part.pin"' in markup
+    assert '<ellipse data-component-key="part.pin"' in markup
+
+
+def test_diameter_height_wheel_geometry_uses_height_as_cylinder_axis():
+    arrangement = _orthographic_arrangement(
+        {
+            "part": _component_geometry(
+                subgeometry=[
+                    {
+                        "key": "wheel",
+                        "primitive": "cylinder",
+                        "height": "180",
+                        "diameter": "400",
+                        "unit": "mm",
+                        "position": {"x": "100", "y": "0", "z": "0"},
+                        "orientation": {"roll": "90", "pitch": "0", "yaw": "0"},
+                    }
+                ]
+            )
+        }
+    )
+    front = drawing_studio_page.build_envelope_views(arrangement)[1]
+    projections = drawing_studio_page.build_component_projections(arrangement, front)
+
+    assert projections[1].view_axes == ("height", "width", "length")
+    assert projections[1].longitudinal_axis == "height"
+    markup = drawing_studio_page._general_arrangement_view_markup(
+        front,
+        "Front View",
+        "Missing geometry",
+        projections,
+    )
+    assert '<ellipse data-component-key="part.wheel"' not in markup
+    assert '<rect data-component-key="part.wheel"' in markup
 
 
 def test_legacy_geometry_without_subgeometry_keeps_existing_markup():

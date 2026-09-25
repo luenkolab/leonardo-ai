@@ -116,6 +116,8 @@ class DisplayRectangle(_StrictModel):
     width: Decimal
     height: Decimal
     scale: Decimal
+    horizontal_min: Decimal = Decimal("0")
+    vertical_min: Decimal = Decimal("0")
 
 
 class ComponentProjection(_StrictModel):
@@ -126,6 +128,8 @@ class ComponentProjection(_StrictModel):
     vertical_size: NormalizedValue
     horizontal_position: NormalizedValue
     vertical_position: NormalizedValue
+    view_axes: tuple[Literal["length", "width", "height"], ...]
+    longitudinal_axis: Literal["length", "height"] = "length"
     wall_thickness: NormalizedValue | None = None
     out_of_envelope: bool
 
@@ -587,20 +591,30 @@ def calculate_display_rectangle(view, max_width=220, max_height=130, projections
     projections = tuple(projections)
     width_limit = Decimal(str(max_width))
     height_limit = Decimal(str(max_height))
-    horizontal_extent = max((
+    horizontal_min = min((
+        Decimal("0"),
+        *(projection.horizontal_position.value for projection in projections),
+    ))
+    vertical_min = min((
+        Decimal("0"),
+        *(projection.vertical_position.value for projection in projections),
+    ))
+    horizontal_max = max((
         view.horizontal.value,
         *(
             projection.horizontal_position.value + projection.horizontal_size.value
             for projection in projections
         ),
     ))
-    vertical_extent = max((
+    vertical_max = max((
         view.vertical.value,
         *(
             projection.vertical_position.value + projection.vertical_size.value
             for projection in projections
         ),
     ))
+    horizontal_extent = horizontal_max - horizontal_min
+    vertical_extent = vertical_max - vertical_min
     scale = min(
         width_limit / horizontal_extent,
         height_limit / vertical_extent,
@@ -609,110 +623,295 @@ def calculate_display_rectangle(view, max_width=220, max_height=130, projections
         width=horizontal_extent * scale,
         height=vertical_extent * scale,
         scale=scale,
+        horizontal_min=horizontal_min,
+        vertical_min=vertical_min,
     )
+
+
+_IDENTITY_ROTATION = (
+    (1, 0, 0),
+    (0, 1, 0),
+    (0, 0, 1),
+)
+_QUARTER_TURN_ROTATIONS = {
+    "roll": (
+        (1, 0, 0),
+        (0, 0, -1),
+        (0, 1, 0),
+    ),
+    "pitch": (
+        (0, 0, 1),
+        (0, 1, 0),
+        (-1, 0, 0),
+    ),
+    "yaw": (
+        (0, -1, 0),
+        (1, 0, 0),
+        (0, 0, 1),
+    ),
+}
+
+
+def _multiply_rotations(left, right):
+    return tuple(
+        tuple(
+            sum(left[row][inner] * right[inner][column] for inner in range(3))
+            for column in range(3)
+        )
+        for row in range(3)
+    )
+
+
+def _orientation_rotation(orientation):
+    """Return an exact right-handed signed-axis rotation for stored quarter turns."""
+    rotation = _IDENTITY_ROTATION
+    if orientation is None:
+        return rotation
+    for field in ("roll", "pitch", "yaw"):
+        angle = getattr(orientation, field) or Decimal("0")
+        if angle % 90:
+            return _IDENTITY_ROTATION
+        for _ in range(int(angle / 90) % 4):
+            rotation = _multiply_rotations(
+                _QUARTER_TURN_ROTATIONS[field], rotation
+            )
+    return rotation
+
+
+def _transform_vector(rotation, vector):
+    transformed = []
+    for row in rotation:
+        value = Decimal("0")
+        for coefficient, coordinate in zip(row, vector):
+            if coefficient and coordinate is None:
+                value = None
+                break
+            if coefficient:
+                value += Decimal(coefficient) * coordinate
+        transformed.append(value)
+    return tuple(transformed)
+
+
+def _add_vectors(left, right):
+    return tuple(
+        first + second if first is not None and second is not None else None
+        for first, second in zip(left, right)
+    )
+
+
+def _subtract_vectors(left, right):
+    return tuple(
+        first - second if first is not None and second is not None else None
+        for first, second in zip(left, right)
+    )
+
+
+def _rotated_bounds(values, rotation):
+    """Return the AABB of transformed box corners, retaining partial axes."""
+    minimums = []
+    maximums = []
+    for row in rotation:
+        minimum = Decimal("0")
+        maximum = Decimal("0")
+        for coefficient, value in zip(row, values):
+            if not coefficient:
+                continue
+            if value is None:
+                minimum = maximum = None
+                break
+            endpoint = Decimal(coefficient) * value
+            minimum += min(Decimal("0"), endpoint)
+            maximum += max(Decimal("0"), endpoint)
+        minimums.append(minimum)
+        maximums.append(maximum)
+    return tuple(minimums), tuple(maximums)
+
+
+def _measurement_with_value(template, value):
+    if template is None or value is None:
+        return None
+    return template.model_copy(update={"value": value})
+
+
+def _component_dimension_values(component):
+    return tuple(
+        value.value if value is not None else None
+        for value in (
+            component.dimensions.length,
+            component.dimensions.width,
+            component.dimensions.height,
+        )
+    )
+
+
+def _component_position_values(component):
+    if component.position is None:
+        return (None, None, None)
+    return tuple(
+        value.value if value is not None else None
+        for value in (component.position.x, component.position.y, component.position.z)
+    )
+
+
+def _axis_measurement(component, rotation, output_axis, *, position=False):
+    source = (
+        (component.position.x, component.position.y, component.position.z)
+        if position and component.position is not None
+        else (
+            component.dimensions.length,
+            component.dimensions.width,
+            component.dimensions.height,
+        )
+    )
+    for coefficient, measurement in zip(rotation[output_axis], source):
+        if coefficient and measurement is not None:
+            return measurement
+    return next((measurement for measurement in source if measurement is not None), None)
 
 
 def oriented_component_dimensions(component):
-    """Apply only safe axis-aligned quarter-turn orientation to dimensions."""
-    dimensions = {
-        "x": component.dimensions.length,
-        "y": component.dimensions.width,
-        "z": component.dimensions.height,
-    }
-    orientation = component.orientation
-    if orientation is None:
-        return component.dimensions
-    angles = tuple(
-        getattr(orientation, field) or Decimal("0")
-        for field in ("roll", "pitch", "yaw")
+    """Return local AABB dimensions after an exact stored quarter turn."""
+    rotation = _orientation_rotation(component.orientation)
+    minimums, maximums = _rotated_bounds(
+        _component_dimension_values(component), rotation
     )
-    if any(angle % 90 for angle in angles):
-        return component.dimensions
-    for angle, axes in zip(angles, (("y", "z"), ("x", "z"), ("x", "y"))):
-        if int(angle / 90) % 2:
-            first, second = axes
-            dimensions[first], dimensions[second] = (
-                dimensions[second],
-                dimensions[first],
-            )
+    sizes = tuple(
+        maximum - minimum
+        if minimum is not None and maximum is not None
+        else None
+        for minimum, maximum in zip(minimums, maximums)
+    )
     return Dimensions(
-        length=dimensions["x"],
-        width=dimensions["y"],
-        height=dimensions["z"],
+        length=_measurement_with_value(
+            _axis_measurement(component, rotation, 0), sizes[0]
+        ),
+        width=_measurement_with_value(
+            _axis_measurement(component, rotation, 1), sizes[1]
+        ),
+        height=_measurement_with_value(
+            _axis_measurement(component, rotation, 2), sizes[2]
+        ),
     )
 
 
 def build_component_projections(arrangement, view, zero_origin=False):
-    """Project only complete component geometry into a known envelope view."""
+    """Compose local quarter-turn transforms and project their world AABBs."""
     axis_map = {
-        "top": ("length", "width", "x", "y"),
-        "front": ("width", "height", "y", "z"),
-        "side": ("length", "height", "x", "z"),
+        "top": (0, 1),
+        "front": (1, 2),
+        "side": (0, 2),
     }
-    horizontal_size, vertical_size, horizontal_position, vertical_position = (
-        axis_map[view.key]
-    )
+    horizontal_axis, vertical_axis = axis_map[view.key]
+    normal_axis = 3 - horizontal_axis - vertical_axis
     projections = []
     components = getattr(arrangement, "components", arrangement)
-    pending = [(component, zero_origin) for component in components]
+    pending = [
+        (component, _IDENTITY_ROTATION, (Decimal("0"),) * 3, zero_origin)
+        for component in components
+    ]
     while pending:
-        component, use_zero_origin = pending.pop(0)
-        dimensions = oriented_component_dimensions(component)
-        h_size = getattr(dimensions, horizontal_size)
-        v_size = getattr(dimensions, vertical_size)
-        if not all((h_size, v_size)):
-            continue
+        component, parent_rotation, parent_offset, use_zero_origin = pending.pop(0)
+        local_rotation = _orientation_rotation(component.orientation)
+        local_minimums, _local_maximums = _rotated_bounds(
+            _component_dimension_values(component), local_rotation
+        )
+        # Stored position remains the component's minimum corner in its containing
+        # frame. Subtracting the rotated local minimum supplies the placement
+        # correction required by signed (negative-direction) quarter turns.
         if use_zero_origin:
-            zero = h_size.model_copy(
-                update={"value": Decimal("0"), "raw_value": "0"}
-            )
-            position = Position(x=zero, y=zero, z=zero)
+            local_position = (Decimal("0"),) * 3
         else:
-            position = component.position
-            if position is None:
-                continue
-        values = (
-            getattr(position, horizontal_position),
-            getattr(position, vertical_position),
+            local_position = _component_position_values(component)
+        local_offset = _subtract_vectors(local_position, local_minimums)
+        # A child's local rotation and corrected placement are composed through
+        # the parent's world transform; no transformed values are stored back.
+        world_rotation = _multiply_rotations(parent_rotation, local_rotation)
+        world_offset = _add_vectors(
+            parent_offset,
+            _transform_vector(parent_rotation, local_offset),
         )
-        if not all(values):
-            continue
-        h_position, v_position = values
-        out_of_envelope = (
-            view.horizontal is not None
-            and view.vertical is not None
-            and (
-                h_position.value + h_size.value > view.horizontal.value
-                or v_position.value + v_size.value > view.vertical.value
+        # Projection consumes the world-space 3D AABB, then selects the two axes
+        # belonging to the requested technical drawing view.
+        world_minimums, world_maximums = _rotated_bounds(
+            _component_dimension_values(component), world_rotation
+        )
+        world_minimums = _add_vectors(world_offset, world_minimums)
+        world_maximums = _add_vectors(world_offset, world_maximums)
+        projected_bounds = (
+            world_minimums[horizontal_axis],
+            world_maximums[horizontal_axis],
+            world_minimums[vertical_axis],
+            world_maximums[vertical_axis],
+        )
+        if all(value is not None for value in projected_bounds):
+            h_minimum, h_maximum, v_minimum, v_maximum = projected_bounds
+            h_size_value = h_maximum - h_minimum
+            v_size_value = v_maximum - v_minimum
+            h_template = _axis_measurement(component, world_rotation, horizontal_axis)
+            v_template = _axis_measurement(component, world_rotation, vertical_axis)
+            position_template = _axis_measurement(
+                component, parent_rotation, horizontal_axis, position=True
             )
-        )
-        projections.append(
-            ComponentProjection(
-                component_key=component.key,
-                component_name=component.name,
-                primitive=component.primitive,
-                horizontal_size=h_size,
-                vertical_size=v_size,
-                horizontal_position=h_position,
-                vertical_position=v_position,
-                wall_thickness=component.wall_thickness,
-                out_of_envelope=out_of_envelope,
+            if position_template is None:
+                position_template = h_template
+            vertical_position_template = _axis_measurement(
+                component, parent_rotation, vertical_axis, position=True
             )
-        )
+            if vertical_position_template is None:
+                vertical_position_template = v_template
+            h_size = _measurement_with_value(h_template, h_size_value)
+            v_size = _measurement_with_value(v_template, v_size_value)
+            h_position = _measurement_with_value(position_template, h_minimum)
+            v_position = _measurement_with_value(
+                vertical_position_template, v_minimum
+            )
+            if all((h_size, v_size, h_position, v_position)):
+                view_axes = tuple(
+                    ("length", "width", "height")[
+                        next(
+                            index
+                            for index, coefficient in enumerate(
+                                world_rotation[output_axis]
+                            )
+                            if coefficient
+                        )
+                    ]
+                    for output_axis in (horizontal_axis, vertical_axis, normal_axis)
+                )
+                out_of_envelope = (
+                    view.horizontal is not None
+                    and view.vertical is not None
+                    and (
+                        h_minimum < 0
+                        or v_minimum < 0
+                        or h_maximum > view.horizontal.value
+                        or v_maximum > view.vertical.value
+                    )
+                )
+                projections.append(
+                    ComponentProjection(
+                        component_key=component.key,
+                        component_name=component.name,
+                        primitive=component.primitive,
+                        horizontal_size=h_size,
+                        vertical_size=v_size,
+                        horizontal_position=h_position,
+                        vertical_position=v_position,
+                        view_axes=view_axes,
+                        longitudinal_axis=(
+                            "height"
+                            if component.primitive in {"cylinder", "shaft"}
+                            and component.dimensions.length is None
+                            else "length"
+                        ),
+                        wall_thickness=component.wall_thickness,
+                        out_of_envelope=out_of_envelope,
+                    )
+                )
         for child in component.subgeometry:
             if child.position is None:
                 continue
-            absolute = {}
-            for field in ("x", "y", "z"):
-                parent_value = getattr(position, field)
-                child_value = getattr(child.position, field)
-                if parent_value is not None and child_value is not None:
-                    absolute[field] = child_value.model_copy(
-                        update={"value": parent_value.value + child_value.value}
-                    )
-            pending.append(
-                (child.model_copy(update={"position": Position(**absolute)}), False)
-            )
+            pending.append((child, world_rotation, world_offset, False))
     return tuple(projections)
 
 

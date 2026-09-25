@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import database
+import pytest
 from application.engineering_parameters import (
     save_component_geometry_values,
     save_overall_envelope_values,
@@ -8,6 +9,7 @@ from application.engineering_parameters import (
 from services.engineering_parameters_service import build_empty_parameter_set
 from services.general_arrangement_service import (
     build_component_projections,
+    build_dimension_views,
     build_general_arrangement,
     build_envelope_views,
     calculate_display_rectangle,
@@ -707,3 +709,314 @@ def test_orthogonal_orientation_swaps_display_axes_without_mutating_source():
         Decimal("50"),
     )
     assert component.dimensions.length.value == Decimal("200")
+
+
+def test_zero_orientation_preserves_dimension_metadata_and_projection_coordinates():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=500; width=400; height=300",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "200",
+            "width": "100",
+            "height": "50",
+            "position": {"x": "10", "y": "20", "z": "30"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "0"},
+            "unit": "mm",
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    component = arrangement.components[0]
+
+    assert oriented_component_dimensions(component).model_dump() == (
+        component.dimensions.model_dump()
+    )
+    top = build_component_projections(
+        arrangement, build_envelope_views(arrangement)[0]
+    )[0]
+    assert (
+        top.horizontal_position.value,
+        top.vertical_position.value,
+        top.horizontal_size.value,
+        top.vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("10", "20", "200", "100"))
+
+
+@pytest.mark.parametrize(
+    ("axis", "angle", "expected_dimensions"),
+    (
+        ("roll", "90", ("200", "50", "100")),
+        ("roll", "-90", ("200", "50", "100")),
+        ("pitch", "90", ("50", "100", "200")),
+        ("pitch", "-90", ("50", "100", "200")),
+        ("yaw", "90", ("100", "200", "50")),
+        ("yaw", "-90", ("100", "200", "50")),
+        ("yaw", "180", ("200", "100", "50")),
+        ("yaw", "270", ("100", "200", "50")),
+    ),
+)
+def test_quarter_turn_dimensions_and_minimum_corner(axis, angle, expected_dimensions):
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=1000; width=1000; height=1000",
+        )
+    )
+    orientation = {field: "0" for field in ("roll", "pitch", "yaw")}
+    orientation[axis] = angle
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "200",
+            "width": "100",
+            "height": "50",
+            "position": {"x": "100", "y": "200", "z": "300"},
+            "orientation": orientation,
+            "unit": "mm",
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    component = arrangement.components[0]
+    original = component.model_dump()
+
+    oriented = oriented_component_dimensions(component)
+    views = build_envelope_views(arrangement)
+    top = build_component_projections(arrangement, views[0])[0]
+    front = build_component_projections(arrangement, views[1])[0]
+    side = build_component_projections(arrangement, views[2])[0]
+
+    assert tuple(
+        value.value for value in (oriented.length, oriented.width, oriented.height)
+    ) == tuple(Decimal(value) for value in expected_dimensions)
+    assert (
+        top.horizontal_position.value,
+        top.vertical_position.value,
+        front.horizontal_position.value,
+        front.vertical_position.value,
+        side.horizontal_position.value,
+        side.vertical_position.value,
+    ) == tuple(
+        Decimal(value)
+        for value in ("100", "200", "200", "300", "100", "300")
+    )
+    assert component.model_dump() == original
+
+
+def test_parent_and_child_local_rotations_compose_in_written_world_coordinates():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=500; width=500; height=500",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "100",
+            "width": "50",
+            "height": "40",
+            "position": {"x": "10", "y": "20", "z": "30"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "unit": "mm",
+            "subgeometry": [
+                {
+                    "key": "mount",
+                    "primitive": "box",
+                    "length": "10",
+                    "width": "8",
+                    "height": "6",
+                    "position": {"x": "20", "y": "10", "z": "5"},
+                    "orientation": {"roll": "90", "pitch": "0", "yaw": "0"},
+                    "unit": "mm",
+                }
+            ],
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    original = arrangement.model_dump()
+
+    # Parent Rz(+90) has correction (50, 0, 0), so its world offset is
+    # (60, 20, 30). Child Rx(+90) has correction (0, 6, 0); composing
+    # Rz * Rx maps child axes to world (Z, X, Y), giving this exact top AABB.
+    views = build_envelope_views(arrangement)
+    top = build_component_projections(arrangement, views[0])
+    front = build_component_projections(arrangement, views[1])
+    side = build_component_projections(arrangement, views[2])
+    parent, child = top
+
+    assert (
+        parent.horizontal_position.value,
+        parent.vertical_position.value,
+        parent.horizontal_size.value,
+        parent.vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("10", "20", "50", "100"))
+    assert (
+        child.horizontal_position.value,
+        child.vertical_position.value,
+        child.horizontal_size.value,
+        child.vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("44", "40", "6", "10"))
+    assert (
+        front[1].horizontal_position.value,
+        front[1].vertical_position.value,
+        front[1].horizontal_size.value,
+        front[1].vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("40", "35", "10", "8"))
+    assert (
+        side[1].horizontal_position.value,
+        side[1].vertical_position.value,
+        side[1].horizontal_size.value,
+        side[1].vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("44", "35", "6", "8"))
+    assert arrangement.model_dump() == original
+
+
+def test_recursive_component_model_composes_grandchild_transform():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=200; width=200; height=200",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "100",
+            "width": "50",
+            "height": "40",
+            "position": {"x": "0", "y": "0", "z": "0"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "unit": "mm",
+            "subgeometry": [
+                {
+                    "key": "mount",
+                    "primitive": "box",
+                    "length": "10",
+                    "width": "8",
+                    "height": "6",
+                    "position": {"x": "20", "y": "10", "z": "5"},
+                    "unit": "mm",
+                    "subgeometry": [
+                        {
+                            "key": "pin",
+                            "primitive": "shaft",
+                            "length": "2",
+                            "width": "2",
+                            "height": "2",
+                            "position": {"x": "2", "y": "3", "z": "1"},
+                            "unit": "mm",
+                        }
+                    ],
+                }
+            ],
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+
+    projections = build_component_projections(
+        arrangement, build_envelope_views(arrangement)[0]
+    )
+    grandchild = projections[2]
+
+    assert (
+        grandchild.horizontal_position.value,
+        grandchild.vertical_position.value,
+        grandchild.horizontal_size.value,
+        grandchild.vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("35", "22", "2", "2"))
+
+
+def test_rotated_child_negative_extent_is_preserved_scaled_and_flagged():
+    parameter_set = _parameter_set(
+        _parameter(
+            "overall_dimensions_envelope",
+            "length=100; width=100; height=100",
+        )
+    )
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "100",
+            "width": "50",
+            "height": "40",
+            "position": {"x": "0", "y": "0", "z": "0"},
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "90"},
+            "unit": "mm",
+            "subgeometry": [
+                {
+                    "key": "outside",
+                    "primitive": "box",
+                    "length": "10",
+                    "width": "10",
+                    "height": "10",
+                    "position": {"x": "0", "y": "80", "z": "0"},
+                    "unit": "mm",
+                }
+            ],
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    top_view = build_envelope_views(arrangement)[0]
+    parent, child = build_component_projections(arrangement, top_view)
+    display = calculate_display_rectangle(top_view, projections=(parent, child))
+
+    assert child.horizontal_position.value == Decimal("-40")
+    assert child.out_of_envelope is True
+    assert display.horizontal_min == Decimal("-40")
+    assert display.width <= Decimal("220")
+
+
+def test_zero_origin_detail_uses_parent_transform_for_child():
+    parameter_set = _parameter_set()
+    parameter_set["component_geometry"] = {
+        "frame": {
+            "length": "100",
+            "width": "50",
+            "height": "40",
+            "orientation": {"roll": "0", "pitch": "0", "yaw": "-90"},
+            "unit": "mm",
+            "subgeometry": [
+                {
+                    "key": "mount",
+                    "primitive": "box",
+                    "length": "10",
+                    "width": "8",
+                    "height": "6",
+                    "position": {"x": "20", "y": "10", "z": "5"},
+                    "unit": "mm",
+                }
+            ],
+        }
+    }
+    arrangement = build_general_arrangement(
+        {"system_components": ["Frame"]}, parameter_set
+    )
+    component = arrangement.components[0]
+    original = component.model_dump()
+    top_view = build_dimension_views(oriented_component_dimensions(component))[0]
+
+    parent, child = build_component_projections(
+        (component,), top_view, zero_origin=True
+    )
+
+    assert component.position is None
+    assert (
+        parent.horizontal_position.value,
+        parent.vertical_position.value,
+    ) == (Decimal("0"), Decimal("0"))
+    assert (
+        child.horizontal_position.value,
+        child.vertical_position.value,
+        child.horizontal_size.value,
+        child.vertical_size.value,
+    ) == tuple(Decimal(value) for value in ("10", "70", "8", "10"))
+    assert component.model_dump() == original
