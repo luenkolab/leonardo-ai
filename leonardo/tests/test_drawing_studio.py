@@ -3,6 +3,7 @@ import re
 from contextlib import nullcontext
 from datetime import datetime
 from decimal import Decimal
+from xml.etree import ElementTree
 
 from application.images import MODERN_CONCEPT_IMAGE_TYPES
 from services import concept_service, image_service
@@ -517,6 +518,29 @@ def test_general_arrangement_svg_uses_real_labels_and_omits_partial_geometry():
     svg_end = top_markup.index("</svg>")
     assert svg_start < top_markup.index("<line ") < svg_end
     assert svg_start < top_markup.index("<text ", svg_start) < svg_end
+    ElementTree.fromstring(top_markup[svg_start:svg_end + len("</svg>")])
+    assert top_markup.count(
+        'stroke="#7a8790" stroke-width="0.34" marker-start='
+    ) == 2
+    assert top_markup.count('stroke="#7a8790" stroke-width="0.42"') == 4
+    assert top_markup.count(
+        'font-size="9" font-weight="300" fill="#d9a84f"'
+    ) == 2
+    assert 'stroke="#f3f8fb"' not in top_markup
+    assert "paint-order=" not in top_markup
+    assert 'stroke-width="0.65"' in top_markup
+    assert 'markerWidth="5" markerHeight="5" refX="2.5" refY="2.5"' in top_markup
+    assert '<path d="M0,0 L5,2.5 L0,5 Z" fill="#7a8790"/>' in top_markup
+    assert top_markup.count('marker-start="url(#ga-arrow-top)"') == 2
+    dimension_lines = re.findall(
+        r'<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" '
+        r'y2="([\d.]+)" stroke="#7a8790" stroke-width="0.34"',
+        top_markup,
+    )
+    horizontal_text = re.search(r'<text x="[\d.]+" y="([\d.]+)"[^>]*>1200 mm</text>', top_markup)
+    vertical_text = re.search(r'<text x="([\d.]+)" y="[\d.]+"[^>]*>800 mm</text>', top_markup)
+    assert horizontal_text and float(horizontal_text.group(1)) - float(dimension_lines[0][1]) == 11
+    assert vertical_text and float(dimension_lines[1][0]) - float(vertical_text.group(1)) == 4
     assert "\n" not in top_markup
     assert "<rect" not in front_markup
     assert "Missing geometry" in front_markup
@@ -648,7 +672,11 @@ def test_planar_primitives_render_face_and_edge_views_differently():
 
     assert _primitive_markup("plate", face_view).count("<line ") == 1
     assert "<line " not in _primitive_markup("plate", edge_view)
-    assert _primitive_markup("panel", face_view).count("<line ") == 2
+    panel_face = _primitive_markup("panel", face_view)
+    assert panel_face.count("<line ") == 2
+    assert 'stroke-width="0.68"' in panel_face
+    assert panel_face.count('stroke-width="0.4"') == 2
+    ElementTree.fromstring(f"<svg>{panel_face}</svg>")
     assert "<line " not in _primitive_markup("panel", edge_view)
     assert _primitive_markup("frame", face_view).count("<rect ") == 2
     assert _primitive_markup("frame", edge_view).count("<rect ") == 1

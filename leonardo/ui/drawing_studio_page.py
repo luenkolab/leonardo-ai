@@ -468,7 +468,7 @@ def _primitive_shape_markup(
     common = (
         f'{key_attribute}data-primitive="{primitive}" '
         'fill="rgba(39, 125, 161, 0.24)" stroke="#277da1" '
-        'stroke-width="1.2"'
+        'stroke-width="0.68"'
     )
     rectangle = (
         f'<rect {common} x="{x:.2f}" y="{y:.2f}" '
@@ -486,7 +486,7 @@ def _primitive_shape_markup(
         inset = max(1.0, min(float(wall_thickness), min(width, height) / 2 - 1.0))
     inner_width = max(0.0, width - 2 * inset)
     inner_height = max(0.0, height - 2 * inset)
-    line_style = 'stroke="#277da1" stroke-width="1" fill="none"'
+    line_style = 'stroke="#277da1" stroke-width="0.4" fill="none"'
     _, vertical_view_axis, view_normal_axis = view_axes or (None, None, None)
 
     if primitive == "beam":
@@ -528,7 +528,7 @@ def _primitive_shape_markup(
                 rectangle
                 + f'<rect x="{x + inset:.2f}" y="{y + inset:.2f}" '
                 f'width="{inner_width:.2f}" height="{inner_height:.2f}" '
-                'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="1"/>'
+                'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="0.4"/>'
             )
         if vertical_view_axis == "length":
             if inner_width < 2:
@@ -556,7 +556,7 @@ def _primitive_shape_markup(
             rectangle
             + f'<rect x="{x + inset:.2f}" y="{y + inset:.2f}" '
             f'width="{inner_width:.2f}" height="{inner_height:.2f}" '
-            'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="1"/>'
+            'fill="rgba(18, 32, 51, 0.36)" stroke="#277da1" stroke-width="0.4"/>'
         )
     if primitive in {"cylinder", "shaft"}:
         if view_normal_axis == longitudinal_axis:
@@ -567,11 +567,11 @@ def _primitive_shape_markup(
         radius = min(width, height) / 2
         center_line = (
             f'<line x1="{center_x:.2f}" y1="{y:.2f}" x2="{center_x:.2f}" '
-            f'y2="{bottom:.2f}" stroke="#277da1" stroke-width="0.8" '
+            f'y2="{bottom:.2f}" stroke="#277da1" stroke-width="0.4" '
             'stroke-dasharray="4 3"/>'
             if vertical_view_axis == longitudinal_axis
             else f'<line x1="{x:.2f}" y1="{center_y:.2f}" x2="{right:.2f}" '
-            f'y2="{center_y:.2f}" stroke="#277da1" stroke-width="0.8" '
+            f'y2="{center_y:.2f}" stroke="#277da1" stroke-width="0.4" '
             'stroke-dasharray="4 3"/>'
         )
         return (
@@ -586,7 +586,7 @@ def _primitive_shape_markup(
             f'<path {key_attribute}data-primitive="shell" '
             f'd="M{x:.2f},{bottom:.2f} Q{center_x:.2f},{y:.2f} '
             f'{right:.2f},{bottom:.2f} Z" fill="rgba(39, 125, 161, 0.24)" '
-            'stroke="#277da1" stroke-width="1.2"/>'
+            'stroke="#277da1" stroke-width="0.68"/>'
         )
     if primitive == "truss":
         if view_normal_axis != "width" or min(width, height) < 6:
@@ -686,27 +686,27 @@ def _general_arrangement_view_markup(
         f'<rect x="{rectangle_x:.2f}" y="{rectangle_y:.2f}" '
         f'width="{rectangle_width:.2f}" height="{rectangle_height:.2f}" '
         'fill="rgba(102, 177, 214, 0.10)" stroke="#315f78" '
-        'stroke-width="1.8"/>'
+        'stroke-width="0.65"/>'
     )
     return "".join(f"""
 <div style="border:1px solid rgba(73, 112, 140, 0.32); border-radius:10px; padding:10px; margin-top:10px; background:rgba(229, 242, 250, 0.18);">
   <div style="font-weight:650; margin:2px 4px 4px;">{safe_title}</div>
   <svg viewBox="0 0 320 220" role="img" aria-label="{safe_title}" style="display:block; width:100%; height:auto;">
     <defs>
-      <marker id="{arrow_id}" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse">
-        <path d="M0,0 L7,3.5 L0,7 Z" fill="#315f78"/>
+      <marker id="{arrow_id}" markerWidth="5" markerHeight="5" refX="2.5" refY="2.5" orient="auto-start-reverse">
+        <path d="M0,0 L5,2.5 L0,5 Z" fill="#7a8790"/>
       </marker>
     </defs>
     {main_rectangle}
     {components_markup}
-    <line x1="{rectangle_x:.2f}" y1="{horizontal_y:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y:.2f}" stroke="#315f78" stroke-width="1" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
-    <line x1="{rectangle_x:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#6b8798" stroke-width="0.8"/>
-    <line x1="{rectangle_x + rectangle_width:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#6b8798" stroke-width="0.8"/>
-    <text x="{rectangle_x + rectangle_width / 2:.2f}" y="{horizontal_y + 17:.2f}" text-anchor="middle" font-size="11" fill="#254b61">{horizontal_label}</text>
-    <line x1="{vertical_x:.2f}" y1="{rectangle_y:.2f}" x2="{vertical_x:.2f}" y2="{rectangle_y + rectangle_height:.2f}" stroke="#315f78" stroke-width="1" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
-    <line x1="{vertical_x - 5:.2f}" y1="{rectangle_y:.2f}" x2="{rectangle_x:.2f}" y2="{rectangle_y:.2f}" stroke="#6b8798" stroke-width="0.8"/>
-    <line x1="{vertical_x - 5:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{rectangle_y + rectangle_height:.2f}" stroke="#6b8798" stroke-width="0.8"/>
-    <text x="{vertical_x - 9:.2f}" y="{rectangle_y + rectangle_height / 2:.2f}" text-anchor="middle" font-size="11" fill="#254b61" transform="rotate(-90 {vertical_x - 9:.2f} {rectangle_y + rectangle_height / 2:.2f})">{vertical_label}</text>
+    <line x1="{rectangle_x:.2f}" y1="{horizontal_y:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y:.2f}" stroke="#7a8790" stroke-width="0.34" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
+    <line x1="{rectangle_x:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#7a8790" stroke-width="0.42"/>
+    <line x1="{rectangle_x + rectangle_width:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x + rectangle_width:.2f}" y2="{horizontal_y + 5:.2f}" stroke="#7a8790" stroke-width="0.42"/>
+    <text x="{rectangle_x + rectangle_width / 2:.2f}" y="{horizontal_y + 11:.2f}" text-anchor="middle" font-size="9" font-weight="300" fill="#d9a84f">{horizontal_label}</text>
+    <line x1="{vertical_x:.2f}" y1="{rectangle_y:.2f}" x2="{vertical_x:.2f}" y2="{rectangle_y + rectangle_height:.2f}" stroke="#7a8790" stroke-width="0.34" marker-start="url(#{arrow_id})" marker-end="url(#{arrow_id})"/>
+    <line x1="{vertical_x - 5:.2f}" y1="{rectangle_y:.2f}" x2="{rectangle_x:.2f}" y2="{rectangle_y:.2f}" stroke="#7a8790" stroke-width="0.42"/>
+    <line x1="{vertical_x - 5:.2f}" y1="{rectangle_y + rectangle_height:.2f}" x2="{rectangle_x:.2f}" y2="{rectangle_y + rectangle_height:.2f}" stroke="#7a8790" stroke-width="0.42"/>
+    <text x="{vertical_x - 4:.2f}" y="{rectangle_y + rectangle_height / 2:.2f}" text-anchor="middle" font-size="9" font-weight="300" fill="#d9a84f" transform="rotate(-90 {vertical_x - 4:.2f} {rectangle_y + rectangle_height / 2:.2f})">{vertical_label}</text>
   </svg>
 </div>
 """.splitlines())
