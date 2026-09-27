@@ -363,10 +363,27 @@ def suggest_engineering_data(
     required_geometry_keys = {
         component["key"] for component in component_context
     } - set(context["engineering_parameters"]["component_geometry"])
+    current_universal_by_key = {
+        parameter["key"]: parameter for parameter in current["universal"]
+    }
+    required_universal_keys = tuple(
+        key
+        for key, _label in UNIVERSAL_PARAMETER_DEFINITIONS
+        if (
+            (parameter := current_universal_by_key.get(key)) is None
+            or parameter["value"] is None
+            or parameter["source"] == "ai"
+        )
+    )
     response_schema = {
         "type": "object",
         "properties": {
-            "universal": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
+            "universal": {
+                "type": "array",
+                "minItems": len(required_universal_keys),
+                "maxItems": len(required_universal_keys),
+                "items": {"$ref": "#/$defs/parameter"},
+            },
             "project_specific": {"type": "array", "items": {"$ref": "#/$defs/parameter"}},
             "component_geometry": {
                 "type": "object",
@@ -502,6 +519,11 @@ quantity, note.
 
 Rules:
 - Write labels and rationale in {ai_language_name(language)}.
+- Required Universal Core keys for this request:
+  {json.dumps(required_universal_keys)}.
+  Return exactly one Universal record for every required key, no duplicates and no
+  other Universal keys. If a reasonable preliminary value truly cannot be supported,
+  still return that required record with value=null and explain why in rationale.
 - Never replace existing user-sourced, concept-sourced, or legacy Core values.
   Fill missing Core values. Existing AI-sourced Core assumptions may be revised,
   recalculated, or explicitly cleared with null when no longer supported by the
@@ -637,6 +659,27 @@ never verified dimensions; every required key has one complete replacement recor
     payload = json.loads(content)
     if not isinstance(payload, dict):
         raise ValueError("AI Engineer response must be a JSON object")
+    raw_universal = payload.get("universal")
+    if not isinstance(raw_universal, list):
+        raise ValueError("AI Engineer response requires universal array")
+    returned_universal_keys = []
+    for parameter in raw_universal:
+        if not isinstance(parameter, dict):
+            raise ValueError("AI Engineer universal records must be JSON objects")
+        returned_universal_keys.append(
+            normalize_parameter_key(parameter.get("key"))
+        )
+    if len(returned_universal_keys) != len(set(returned_universal_keys)):
+        raise ValueError("AI Engineer response has duplicate Universal Core keys")
+    required_universal_key_set = set(required_universal_keys)
+    returned_universal_key_set = set(returned_universal_keys)
+    if returned_universal_key_set != required_universal_key_set:
+        raise ValueError(
+            "AI Engineer response has incomplete Universal Core "
+            f"(missing={sorted(required_universal_key_set - returned_universal_key_set)}, "
+            f"unexpected={sorted(returned_universal_key_set - required_universal_key_set)})"
+        )
+
     component_geometry = payload.get("component_geometry")
     if not isinstance(component_geometry, dict):
         raise ValueError("AI Engineer response requires component_geometry object")
