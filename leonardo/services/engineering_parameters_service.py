@@ -763,6 +763,15 @@ def merge_ai_engineering_data(parameter_set, suggestions, valid_component_keys):
             }
         )
 
+    current_universal_keys = {item["key"] for item in current["universal"]}
+    for key, _label in UNIVERSAL_PARAMETER_DEFINITIONS:
+        if key in current_universal_keys:
+            continue
+        suggestion = incoming_universal.get(key)
+        if suggestion is not None:
+            current["universal"].append(suggestion)
+            current_universal_keys.add(key)
+
     universal_keys = {item["key"] for item in current["universal"]}
     universal_labels = {item["label"].casefold() for item in current["universal"]}
     merged_project = [
