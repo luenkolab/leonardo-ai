@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "manifest_kind": "VIKA_PROJECT_LINK",
+  "connection_state": "DECLARED_ONLY",
+  "runtime_connected": false,
+  "data_exchange_enabled": false,
+  "write_actions_enabled": false,
+  "credentials_required_now": false,
+  "automatic_execution_enabled": false,
+  "project_id": "leonardo",
+  "repository": "luenkolab/leonardo-ai",
+  "tracking_branch": "main",
+  "role": "future_creative_project_data_provider",
+  "product_status": "MVP_under_development_not_deployed",
+  "current_data_store": "local_SQLite_via_leonardo/database.py",
+  "current_interface": "Streamlit_no_integrations_API",
+  "current_internal_capabilities": [
+    "list saved concepts",
+    "read saved concept by ID",
+    "concept generation through application service",
+    "concept images and gallery",
+    "engineering parameter sets"
+  ],
+  "future_vika_access": "separate_permissioned_adapter_only",
+  "limitations": [
+    "Does not expose or publish new APIs",
+    "Does not give third parties access to SQLite",
+    "No cross-repository runtime link"
+  ]
+}
